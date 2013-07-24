@@ -25,15 +25,15 @@ throughput is more than compensated by doubling the number of cores supported.
 
 Contents
 --------
-DE2-115-Single	Single core, this is the simplest implimentation. NOT TESTED as I do
+DE2-115-Single  Single core, this is the simplest implimentation. NOT TESTED as I do
                 not have a DE2_115 a board. Should be trivial to add multiple cores.
 
-DE0-Nano		Uses interpolation as the full scratchpad does not fit, which adds
+DE0-Nano        Uses interpolation as the full scratchpad does not fit, which adds
                 complexity and reduces speed. TESTED and WORKS at 0.94 KHash/sec.
 
-scripts			Mining scripts.
+scripts         Mining scripts.
 
-source			Verilog source code.
+source          Verilog source code.
 
 A Xilinx LX150 port for ngzhang's Icarus board is in development.
 
