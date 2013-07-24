@@ -6,6 +6,7 @@ See the GNU General Public License for more details.
 
 Project includes code from https://github.com/progranism/Open-Source-FPGA-Bitcoin-Miner
 Scrypt algorithm is based on https://github.com/ckolivas/cgminer/blob/master/scrypt.c
+Discussion is at https://forum.litecoin.net/index.php/topic,5162.0.html
 
 The scrypt algorithm is implimented using on-chip FPGA RAM, so should be portable to any
 FPGA large enough to support 1024kBit of RAM (512kBit with interpolation, eg DE0-Nano).
@@ -19,19 +20,22 @@ since the scrypt algorithm is essentially serial. RAM is also clocked at this sp
 faster clock would help improve performance a little (and is essential for external RAM)
 at the expense of complexity.
 
+Multiple cores are best implimented using the 512kBit scratchpad as the slower individual
+throughput is more than compensated by doubling the number of cores supported.
+
 Contents
 --------
 DE2-115-Single	Single core, this is the simplest implimentation. NOT TESTED as I do
-				not have a DE2_115 a board. Should be trivial to add multiple cores.
+                not have a DE2_115 a board. Should be trivial to add multiple cores.
 
 DE0-Nano		Uses interpolation as the full scratchpad does not fit, which adds
-				complexity and reduces speed. TESTED and WORKS at 0.94 KHash/sec.
+                complexity and reduces speed. TESTED and WORKS at 0.94 KHash/sec.
 
 scripts			Mining scripts.
 
 source			Verilog source code.
 
-A Xilinx LX150 port will be forthcoming fairly soon.
+A Xilinx LX150 port for ngzhang's Icarus board is in development.
 
 Usage
 -----
