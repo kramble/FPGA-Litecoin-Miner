@@ -34,19 +34,65 @@ proc fpga_init {} {
 # Push new work to the FPGA
 proc push_work_to_fpga {workl} {
 	global fpga_last_nonce
+	global verbose
+	global testmode
+	global test_prevnonce
+	global prevtarget
+	
 	array set work $workl
 
+	set target [string range [reverseHex $work(target)] 0 7]
+	
+	# Adjust data3 when in test mode
+	set revdata [reverseHex $work(data)]
+	set data3 [string range $revdata 64 127]
+	
+	if { $testmode } {
+		set data3_nonce [string range $data3 32 39]
+		# Need to subtract a few from the nonce else it does not match. The offset needed is
+		# is a little variable, but 6 seems OK. TODO investigate why this is happening.
+		# Perhaps write_instance is not sending data in strict order (eg if DAT3 completes
+		# before DAT1 or DAT2 then the nonce will be set before the rest of data is ready)
+		# Indeed, if the CPU is heavily loaded then a much higher offset is needed.
+		set data3_nonce [expr 0x$data3_nonce - 50]
+		if { $data3_nonce < 0 } {
+			set data3_nonce 0
+		}
+		# Kludge since FPGA relies on detecting a different nonce to load the test nonce
+		# NB it can still glitch unless we load the bitstream afresh each time since the fpga
+		# remembers the final getwork sent from the previous test run.
+		if { $test_prevnonce == $data3_nonce } {
+			set data3_nonce [expr $data3_nonce + 1]
+		}
+		set test_prevnonce $data3_nonce
+		set newdata3 [string range $data3 0 31]
+		append newdata3 [format "%08x" $data3_nonce]
+		append newdata3 [string range $data3 40 63]
+		set data3 $newdata3
+	}
+	
 	# work(data) is 128 bytes (ie the 80 byte header, padded to 128 bytes as per sha256)
 	# we reverse the string first, so need to count backwards when indexing
-	write_instance "DAT1" [string range [reverseHex $work(data)] 192 255]
-	write_instance "DAT2" [string range [reverseHex $work(data)] 128 191]
-	write_instance "DAT3" [string range [reverseHex $work(data)] 64 127]
-	
-	# Write it out for DEBUG
-	# puts [string range [reverseHex $work(data)] 192 255]
-	# puts [string range [reverseHex $work(data)] 128 191]
-	# puts [string range [reverseHex $work(data)] 64 127]
+	write_instance "DAT1" [string range $revdata 192 255]
+	write_instance "DAT2" [string range $revdata 128 191]
+	write_instance "DAT3" $data3
 
+	# Only write target the first time (and if it subsequently changes)
+	if { $prevtarget != $target } {
+		write_instance "TARG" $target
+	}
+	
+	if { $verbose } {
+	# Write it out for DEBUG
+	puts [string range $revdata 192 255]
+	puts [string range $revdata 128 191]
+	puts $data3
+	if { $prevtarget != $target } {
+		puts "target $target"
+	}
+	}
+	
+	set prevtarget $target
 	# Reset the last seen nonce, since we've just given the FPGA new work
 	set fpga_last_nonce [read_instance GNON]
 }

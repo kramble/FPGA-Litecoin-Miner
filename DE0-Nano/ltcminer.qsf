@@ -97,7 +97,7 @@ set_instance_assignment -name SLEW_RATE 0 -to LEDS_out[0]
 set_instance_assignment -name SLEW_RATE 0 -to LEDS_out[1]
 set_global_assignment -name VERILOG_FILE "../source/ltcminer.v"
 set_global_assignment -name VERILOG_FILE "../source/hashcore.v"
-set_global_assignment -name VERILOG_FILE "../source/altera_halfram.v"
+set_global_assignment -name VERILOG_FILE "../source/altera_ram.v"
 set_global_assignment -name VERILOG_FILE "../source/salsa.v"
 set_global_assignment -name VERILOG_FILE "../source/sha256_transform.v"
 set_global_assignment -name VERILOG_FILE "../source/sha-256-functions.v"

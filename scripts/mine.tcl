@@ -33,9 +33,23 @@ source utils.tcl
 source json_rpc.tcl
 source jtag_comm.tcl
 
-
+# Configuration
+# -------------
+# Additional DEBUG output getwork and current nonce ...
+set verbose 0
+# Reads getwork (including nonce) from a file ...
+set testmode 0
+# Delay between getwork requests (in seconds) ...
+set ask_rate 20
+			
 set total_accepted 0
 set total_rejected 0
+
+set test_total 0
+set test_matches 0
+set test_errors 0
+set test_prevnonce 0
+set prevtarget "none"
 
 proc say_line {msg} {
 	set t [clock format [clock seconds] -format "%D %T"]
@@ -47,7 +61,8 @@ proc say_error {msg} {
 	puts stderr "\[$t\] $msg"
 }
 
-proc say_status {rate est_rate accepted rejected} {
+proc say_status {rate est_rate accepted rejected curnonce} {
+	global verbose
 	set submitted [expr {$rejected + $accepted}]
 
 	if {$submitted == 0} {
@@ -56,8 +71,15 @@ proc say_status {rate est_rate accepted rejected} {
 		set rej_rate [expr {$rejected * 100.0 / $submitted}]
 	}
 
+	# BTC ...
 	# say_line [format "%.2f MH/s (~%.2f MH/s) \[Rej: %i/%i (%.2f%%)\]" $rate $est_rate $rejected $submitted $rej_rate]
-	say_line [format "%.2f kH/s (~%.2f kH/s) \[Rej: %i/%i (%.2f%%)\]" $rate $est_rate $rejected $submitted $rej_rate]
+	
+	# LTC ...
+	if { $verbose } {
+		say_line [format "%.2f kH/s (~%.2f kH/s) \[Rej: %i/%i (%.2f%%)\] n=%08x" $rate $est_rate $rejected $submitted $rej_rate $curnonce]
+	} else {
+		say_line [format "%.2f kH/s (~%.2f kH/s) \[Rej: %i/%i (%.2f%%)\]" $rate $est_rate $rejected $submitted $rej_rate]
+	}
 }
 
 # Loop until a new share is found, or timeout seconds have passed.
@@ -117,7 +139,7 @@ proc wait_for_golden_ticket {timeout} {
 			# LTC: each share is worth ~(2^32 / 0x7ff / 1,000) kH/s ... sort of a guess really
 			set est_rate [expr {($total_accepted + $total_rejected) * 2098.76 / ($current_time - $global_start_time + 0.00001)}]
 
-			say_status $rate $est_rate $total_accepted $total_rejected
+			say_status $rate $est_rate $total_accepted $total_rejected $current_nonce
 		}
 	}
 
@@ -142,9 +164,23 @@ proc submit_nonce {workl golden_nonce} {
 	}
 }
 
+proc parse_work_from_file {line} {
+	array unset work
+
+	set work(midstate) "0000000000000000000000000000000000000000000000000000000000000000"
+	set work(data) $line
+	set work(target) "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff070000"
+	
+	return [array get work]
+}
+
 
 puts " --- FPGA Mining Tcl Script --- \n\n"
 
+if { $testmode } {
+	puts "INFO Running in TEST mode, reading from test_data.txt\n"
+	set testfp [open "test_data.txt" r]
+}
 
 puts "Looking for and preparing FPGAs...\n"
 if {[fpga_init] == -1} {
@@ -169,7 +205,17 @@ set work -1
 
 while {1} {
 	# Get new work
-	set newwork [get_work $url $userpass]
+	if { $testmode } {
+		if { [gets $testfp line]	< 0 } {
+			puts "EOF on test data"
+			puts "$test_matches OK, $test_errors errors out of $test_total tested"
+			break
+		}
+		set newwork [parse_work_from_file $line]
+		set test_total [expr $test_total + 1]
+	} else {
+		set newwork [get_work $url $userpass]
+	}
 
 	if {$newwork != -1} {
 		# Check to see if the FPGA completed any results while we were getting new work.
@@ -191,13 +237,28 @@ while {1} {
 	# We wait 20 seconds, because after 20 seconds we should go get new work from the pool.
 	# Getting new work every 20 seconds helps prevent stale shares.
 	# TODO: Implement Long Polling ... :P
-	set golden_nonce [wait_for_golden_ticket 20]
+
+	# kramble: now using $ask_rate set at top of file
+	set golden_nonce [wait_for_golden_ticket $ask_rate]
 
 	if {$golden_nonce == -1 || ![array exists work]} {
 		continue
 	}
 
-	submit_nonce [array get work] $golden_nonce
+	if { $testmode } {
+		# Check golden_nonce
+		set gn [string range [reverseHex $work(data)] 96 103]
+		if { [format "%08x" $golden_nonce] != $gn } {
+			puts [format "ERROR golden nonce $gn does not match expected %08x" $golden_nonce]
+			set test_errors [expr $test_errors + 1]
+		} else {
+			puts [format "OK golden nonce correct %08x" $golden_nonce]
+			set test_matches [expr $test_matches + 1]
+		}
+		
+	} else {
+		submit_nonce [array get work] $golden_nonce
+	}
 }
 
 

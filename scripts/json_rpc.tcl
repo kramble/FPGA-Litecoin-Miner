@@ -23,6 +23,7 @@ proc get_work {url userpass} {
 
 		set work(midstate) [dict get $json_result midstate]
 		set work(data) [dict get $json_result data]
+		set work(target) [dict get $json_result target]
 	} exc] {
 		say_error "ERROR: Unable to getwork. Reason: $exc"
 		return -1

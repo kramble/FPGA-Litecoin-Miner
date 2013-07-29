@@ -1,3 +1,6 @@
+// altera_halfram.v is now OBSOLETE, use altera_ram.v with
+// parameter ADDRBITS = 9
+
 // megafunction wizard: %RAM: 1-PORT%
 // GENERATION: STANDARD
 // VERSION: WM1.0
