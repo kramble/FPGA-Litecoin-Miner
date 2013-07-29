@@ -22,11 +22,17 @@
 	
 `timescale 1ns/1ps
 
-module hashcore (hash_clk, nonce_msb, nonce_out);
+module hashcore (hash_clk, data1, data2, data3, target, nonce_msb, nonce_out, golden_nonce_out, golden_nonce_match);
 
 	input hash_clk;
-	input [3:0] nonce_msb;		// Supports multicore
-	output [31:0] nonce_out;	// Just for info, eg display on LEDs
+	input [255:0] data1;
+	input [255:0] data2;
+	input [127:0] data3;
+	input [31:0] target;
+	input [3:0] nonce_msb;		// Supports multicore (set MULTICORE below)
+	output [31:0] nonce_out;
+	output [31:0] golden_nonce_out;
+	output golden_nonce_match;	// Strobe valid one cycle on a match (needed for serial comms)
 
 	reg poweron_reset = 1'b1;
 	reg reset = 1'b1;
@@ -37,23 +43,23 @@ module hashcore (hash_clk, nonce_msb, nonce_out);
 		reset <= poweron_reset;			// Ensures a full clock cycle for reset
 	end
 	
-	// 80 byte block header (NB this implimetation does not use midstate)
-	reg [255:0] data1 = 256'd0;
-	reg [255:0] data2 = 256'd0;
-	reg [127:0] data3 = 128'd0;			// Only using 12 bytes of 16 (CARE vw protocol may need 32)
+	reg [31:0] nonce_prevous_load = 32'hffffffff;	// See note in salsa mix FSM
 
-	// reg [31:0] nonce = 32'd0;		// Use this for single core if full range is wanted
-	reg [27:0] nonce_cnt = 28'd0;		// Multicore version
-	wire [31:0] nonce;
-	assign nonce = { nonce_msb, nonce_cnt };
+	`ifdef MULTICORE
+		reg [27:0] nonce_cnt = 28'd0;		// Multiple cores use different prefix
+		wire [31:0] nonce;
+		assign nonce = { nonce_msb, nonce_cnt };
+	`else
+		reg [31:0] nonce = 32'd0;			// NB Initially loaded from data3[127:96], see salsa mix FSM
+	`endif
+
 	assign nonce_out = nonce;
 
-	// Target ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff070000 (7ff is 2048) will match 2048/4G hashes ie 1/2097152
-	reg [31:0] target = 31'h000007ff;	// This is target for mining-foreman.org [TODO pass in, possibly full 256 bits]
-
 	reg [31:0] nonce_1 = 32'd0;		// Pipeline nonce since needed for final PBKDF2_SHA256_80_128_32
-	reg [31:0] nonce_2 = 32'd0;		// Could perhaps get away with just subtracting 2 from current nonce, but dicey
+	reg [31:0] nonce_2 = 32'd0;
 	reg [31:0] golden_nonce = 32'd0;
+	assign golden_nonce_out = golden_nonce;
+	reg golden_nonce_match = 1'b0;
 	
 	reg [255:0] rx_state;
 	reg [511:0] rx_input;
@@ -61,7 +67,9 @@ module hashcore (hash_clk, nonce_msb, nonce_out);
 	reg [255:0] khash = 256'd0;		// Key hash (NB scrypt.c calls this ihash)
 	reg [255:0] ihash = 256'd0;		// IPAD hash
 	reg [255:0] ohash = 256'd0;		// OPAD hash
-	reg [255:0] final_hash = 256'd0;	// Just for DEBUG, only need top 32 bits in live code.
+	`ifdef SIM
+		reg [255:0] final_hash = 256'd0;	// Just for DEBUG, only need top 32 bits in live code.
+	`endif
 	reg [31:0] blockcnt = 32'd0;	// Takes values 1..4 for block iteration (NB could hardwire top 29 bits)
 	reg [1023:0] Xbuf = 1024'd0;
 	reg [1023:0] MixOut;			// Salsa mixer ouput
@@ -81,32 +89,6 @@ module hashcore (hash_clk, nonce_msb, nonce_out);
 		.tx_hash(tx_hash)
 	);
 
-	`ifndef SIM
-
-	//// Virtual Wire Control
-	wire [255:0] data1_vw;
-	wire [255:0] data2_vw;
-	wire [127:0] data3_vw;
-
-	virtual_wire # (.PROBE_WIDTH(0), .WIDTH(256), .INSTANCE_ID("DAT1")) data1_vw_blk(.probe(), .source(data1_vw));
-	virtual_wire # (.PROBE_WIDTH(0), .WIDTH(256), .INSTANCE_ID("DAT2")) data2_vw_blk(.probe(), .source(data2_vw));
-	virtual_wire # (.PROBE_WIDTH(0), .WIDTH(128), .INSTANCE_ID("DAT3")) data3_vw_blk(.probe(), .source(data3_vw));
-
-
-	always @ (posedge hash_clk)
-	begin
-		data1 <= data1_vw;
-		data2 <= data2_vw;
-		data3 <= data3_vw;
-	end
-
-	//// Virtual Wire Output
-	
-	virtual_wire # (.PROBE_WIDTH(32), .WIDTH(0), .INSTANCE_ID("GNON")) golden_nonce_vw_blk (.probe(golden_nonce), .source());
-	virtual_wire # (.PROBE_WIDTH(32), .WIDTH(0), .INSTANCE_ID("NONC")) nonce_vw_blk (.probe(nonce), .source());
-
-	`endif
-	
 	// These flags control the interaction of the SHA256 and SalsaMix FSM's. While OK in simulation
 	// Altera Quartus II barfs on synthesis, hence the ugly hack.
 	
@@ -128,18 +110,18 @@ module hashcore (hash_clk, nonce_msb, nonce_out);
 	always @ (posedge hash_clk)
 	begin
 		if (Set_SMixInRdy)
-			SMixInRdy_state <= 1;
+			SMixInRdy_state <= 1'b1;
 		if (Clr_SMixInRdy)
-			SMixInRdy_state <= 0;	// Clr overrides set
+			SMixInRdy_state <= 1'b0;	// Clr overrides set
 		if (Set_SMixOutRdy)
-			SMixOutRdy_state <= 1;
+			SMixOutRdy_state <= 1'b1;
 		if (Clr_SMixOutRdy)
-			SMixOutRdy_state <= 0;	// Clr overrides set
+			SMixOutRdy_state <= 1'b0;	// Clr overrides set
 	end
 	
 	// Achieves identical timing to original version, but probably overkill
-	assign SMixInRdy = Clr_SMixInRdy ? 0 : Set_SMixInRdy ? 1 : SMixInRdy_state;
-	assign SMixOutRdy = Clr_SMixOutRdy ? 0 : Set_SMixOutRdy ? 1 : SMixOutRdy_state;
+	assign SMixInRdy = Clr_SMixInRdy ? 1'b0 : Set_SMixInRdy ? 1'b1 : SMixInRdy_state;
+	assign SMixOutRdy = Clr_SMixOutRdy ? 1'b0 : Set_SMixOutRdy ? 1'b1 : SMixOutRdy_state;
 		
 	// Controller FSM for PBKDF2_SHA256_80_128 (multiple hashes using the sha256_transform)
 	// Based on scrypt.c from cgminer (Colin Percival, ArtForz). I don't even pretend to
@@ -164,8 +146,9 @@ module hashcore (hash_clk, nonce_msb, nonce_out);
 	reg mode = 0;	// 0=PBKDF2_SHA256_80_128, 1=PBKDF2_SHA256_80_128_32
 	always @ (posedge hash_clk)
 	begin
-		Set_SMixInRdy <= 0;	// Ugly hack, these are overriden below
-		Clr_SMixOutRdy <= 0;
+		Set_SMixInRdy <= 1'b0;	// Ugly hack, these are overriden below
+		Clr_SMixOutRdy <= 1'b0;
+		golden_nonce_match <= 1'b0;	// Default to reset
 		
 		if (reset == 1'b1)
 			state <= S_IDLE;
@@ -183,9 +166,9 @@ module hashcore (hash_clk, nonce_msb, nonce_out);
 						blockcnt <= 32'd1;
 						cnt <= 6'd0;
 						if (SMixOutRdy)				// Give preference to output
-							mode <= 1;
+							mode <= 1'b1;
 						else
-							mode <= 0;
+							mode <= 1'b0;
 						state <= S_H1;
 					end
 				end
@@ -450,17 +433,19 @@ module hashcore (hash_clk, nonce_msb, nonce_out);
 				end
 				S_R18: begin	// Sync hash
 						// Check for golden nonce in tx_hash
-						final_hash <= tx_hash;		// For now just save for debug
+						`ifdef SIM
+							final_hash <= tx_hash;		// For debug
+						`endif
 						// Could optimise target calc ...
 						if ( { tx_hash[231:224], tx_hash[239:232], tx_hash[247:240], tx_hash[255:248] } < target)
 						begin
 							golden_nonce <= nonce_2;
-							// In serial comms we need to send it, but automatic in virtualwire
+							golden_nonce_match <= 1'b1;	// Set flag (for one cycle only, see default at top)
 						end
 						state <= S_IDLE;
 						mode <= 0;
-						// SMixOutRdy <= 0;		// Original version
-						Clr_SMixOutRdy <= 1;	// Ugly hack
+						// SMixOutRdy <= 1'b0;	// Original version
+						Clr_SMixOutRdy <= 1'b1;	// Ugly hack
 				end
 			endcase	
 		end
@@ -518,10 +503,12 @@ module hashcore (hash_clk, nonce_msb, nonce_out);
 	// Output is unregistered, OLD data on write (less delay than NEW??)
 	
 	`ifdef HALFRAM
-		wire [8:0]ram_addr;
+		parameter ADDRBITS = 9;
 	`else
-		wire [9:0]ram_addr;
+		parameter ADDRBITS = 10;
 	`endif
+
+	wire [ADDRBITS-1:0]ram_addr;
 	wire [255:0]ram1_din;
 	wire [255:0]ram1_dout;
 	wire [255:0]ram2_din;
@@ -532,25 +519,21 @@ module hashcore (hash_clk, nonce_msb, nonce_out);
 	wire [255:0]ram4_dout;
 	wire [1023:0]ramout;
 
-	reg ram_wren;				// Try reg for now
+	reg ram_wren;
 	wire ram_clk;
-	assign ram_clk = hash_clk;	// Use same clock as hasher for now
+	assign ram_clk = hash_clk;	// Uses same clock as hasher for now
 	
 	`ifdef HALFRAM
 		// This is the half scratchpad version
 		assign ram_addr = addrsourceMix ? Xmix[9:1] : writeaddr[9:1];	// LSB is ignored
-		halfram ram1_blk (ram_addr, ram_clk, ram1_din, ram_wren, ram1_dout);
-		halfram ram2_blk (ram_addr, ram_clk, ram2_din, ram_wren, ram2_dout);
-		halfram ram3_blk (ram_addr, ram_clk, ram3_din, ram_wren, ram3_dout);
-		halfram ram4_blk (ram_addr, ram_clk, ram4_din, ram_wren, ram4_dout);
 	`else
 		// This is the full scratchpad version
 		assign ram_addr = addrsourceMix ? Xmix[9:0] : writeaddr;
-		ram ram1_blk (ram_addr, ram_clk, ram1_din, ram_wren, ram1_dout);
-		ram ram2_blk (ram_addr, ram_clk, ram2_din, ram_wren, ram2_dout);
-		ram ram3_blk (ram_addr, ram_clk, ram3_din, ram_wren, ram3_dout);
-		ram ram4_blk (ram_addr, ram_clk, ram4_din, ram_wren, ram4_dout);
 	`endif
+	ram # (.ADDRBITS(ADDRBITS)) ram1_blk (ram_addr, ram_clk, ram1_din, ram_wren, ram1_dout);
+	ram # (.ADDRBITS(ADDRBITS)) ram2_blk (ram_addr, ram_clk, ram2_din, ram_wren, ram2_dout);
+	ram # (.ADDRBITS(ADDRBITS)) ram3_blk (ram_addr, ram_clk, ram3_din, ram_wren, ram3_dout);
+	ram # (.ADDRBITS(ADDRBITS)) ram4_blk (ram_addr, ram_clk, ram4_din, ram_wren, ram4_dout);
 	assign ramout = { ram4_dout, ram3_dout, ram2_dout, ram1_dout };	// Unregistered output
 	assign { ram4_din, ram3_din, ram2_din, ram1_din } = { X1, X0} ;	// Registered input
 
@@ -558,15 +541,29 @@ module hashcore (hash_clk, nonce_msb, nonce_out);
 	
 	salsa salsa_blk (hash_clk, mixfeedback, X0, X1, Xmix);
 
-	// FSM (see note above about bad coding style)
+	// Salsa FSM (see note above about bad coding style)
 	
 	always @ (posedge hash_clk)
 	begin
-		Set_SMixOutRdy <= 0;
-		Clr_SMixInRdy <= 0;
+		Set_SMixOutRdy <= 1'b0;
+		Clr_SMixInRdy <= 1'b0;
 		`ifdef HALFRAM
 			oddAddr <= Xmix[0];		// Flag odd addresses (for use in next cycle due to ram latency)
 		`endif
+		if (nonce_prevous_load != data3[127:96])
+		begin
+			`ifndef MULTICORE
+				nonce <= data3[127:96];	// Supports loading of initial nonce for test purposes (potentially
+										// overriden by the increment below, but this occurs very rarely)
+										// This also gives a consistent start point when we send the first work
+										// packet (but ONLY the first one since its always zero) when using live data
+										// as we initialise nonce_prevous_load to ffffffff
+			`else
+				nonce_cnt <= data3[123:96];	// The 4 msb of nonce are hardwired in MULTICORE mode, so test nonce
+											// needs to be <= 0fffffff and will only match in the 0 core
+			`endif
+			nonce_prevous_load <= data3[127:96];
+		end
 		if (reset == 1'b1)
 			mstate <= R_IDLE;
 		else
@@ -577,45 +574,50 @@ module hashcore (hash_clk, nonce_msb, nonce_out);
 					mcount <= 0;
 					X0 <= X[511:0];
 					X1 <= X[1023:512];
-					mixfeedback <= 0;
-					addrsourceMix <= 0;
+					mixfeedback <= 1'b0;
+					addrsourceMix <= 1'b0;
 					if (SMixInRdy)
 						begin
 							mstate <= R_WRITE;
-							doneROM <= 0;
-							ram_wren <= 1;		// Initial write cycle
+							doneROM <= 1'b0;
+							ram_wren <= 1'b1;		// Initial write cycle
 							// SMixInRdy <= 0;		// Original version
 							Clr_SMixInRdy <= 1;		// Ugly hack
 							// Save and increment nonce (NB done here not in SHA256 FSM)
 							nonce_1 <= nonce;
-							// nonce <= nonce + 1;		// See note at declaration
-							nonce_cnt <= nonce_cnt + 1;	// Multicore version
+							`ifdef MULTICORE
+								nonce_cnt <= nonce_cnt + 28'd1;
+							`else
+								nonce <= nonce + 32'd1;
+							`endif
 						end
 				end
 				R_WRITE: begin
-					mcount <= mcount + 1;
+					mcount <= mcount + 6'd1;
 					ram_wren <= 0;		// Default state, overriden below at mcount==9
-					// 10 stages since two times (4 cycle salsa plus extra clock to load X0,X1. TODO can this be avoided?)
+					// 8 stages since salsa takes 4 clock cycles. NB This minimises clock cycles, but adds to
+					// the propagation delay in the salsa. The alternative of adding a cycle or two of latency to
+					// reduce propagation delay is SLOWER due to the extra clocks needed.
 					// Write to ROM every 2nd cycle (NB we are writing previous data here)
 					// NB One extra cycle is performed after ROM is complete to update X0,X1 to inital state for R_MIX
 					if (mcount==0)
 					begin
-						mixfeedback <= 1;
+						mixfeedback <= 1'b1;
 						if (writeaddr==1023)
-							doneROM <= 1;			// Need to do one more cycle to update X0,X1
-						writeaddr <= writeaddr + 1;
+							doneROM <= 1'b1;			// Need to do one more cycle to update X0,X1
+						writeaddr <= writeaddr + 10'd1;
 					end
-					if (mcount==5)
-						mixfeedback <= 1;
-					if (mcount == 4 || mcount == 9)
+					if (mcount==4)
+						mixfeedback <= 1'b1;
+					if (mcount == 3 || mcount == 7)
 					begin
 						X0 <= X1;
 						X1 <= Xmix;
-						mixfeedback <= 0;
+						mixfeedback <= 1'b0;
 					end
-					if (mcount == 8 && doneROM)			// NASTY HACK ... preset the address source one cycle early
-						addrsourceMix <= 1;
-					if (mcount == 9)
+					if (mcount == 6 && doneROM)			// NASTY HACK ... preset the address source one cycle early
+						addrsourceMix <= 1'b1;
+					if (mcount == 7)
 					begin
 						mcount <= 0;
 						if (doneROM)
@@ -628,19 +630,20 @@ module hashcore (hash_clk, nonce_msb, nonce_out);
 							// NB the !doneROM test is superfluous here as its in the else clause of if(doneROM)
 							`ifdef HALFRAM
 								if (!doneROM && !writeaddr[0])	// Do not write on odd cycles (half scratchpad)
-									ram_wren <= 1;				// Since registered we preset this here
+									ram_wren <= 1'b1;			// Since registered we preset this here
 							`else
 								if (!doneROM)
-									ram_wren <= 1;				// Since registered we preset this here
+									ram_wren <= 1'b1;			// Since registered we preset this here
 							`endif
 						end
 					end
 				end
 				R_MIX: begin
-					// Entered with mixfeedback == 0 (set at mcount==9 above)
-					// NB There is an extra step here cf R_RUN above vs xor with ramout, hence 11 not 10 stages
-					// TODO perhaps this can be combined with the existing extra cycle of latency?
-					mcount <= mcount + 1;
+					// Entered with mixfeedback == 0 (set at mcount==7 above)
+					// NB There is an extra step here cf R_WRITE above to read ram data hence 9 not 8 stages.
+					// The longest chain is from mixfeedback to ram address input (since XMix is not registered),
+					// again as noted above, extra register stages would simply reduce throughput.
+					mcount <= mcount + 5'd1;
 					if (mcount == 0)
 					begin
 						`ifdef HALFRAM
@@ -656,29 +659,29 @@ module hashcore (hash_clk, nonce_msb, nonce_out);
 							else
 							begin
 								// Perhaps we can reuse the xor's in the salsa module here?
-								mixfeedback <= 0;
+								mixfeedback <= 1'b0;
 								X0 <= X0 ^ ramout[511:0];
 								X1 <= X1 ^ ramout[1023:512];
 							end
 						`else
 							// Perhaps we can reuse the xor's in the salsa module here?
-							mixfeedback <= 0;
+							mixfeedback <= 1'b0;
 							 X0 <= X0 ^ ramout[511:0];
 							 X1 <= X1 ^ ramout[1023:512];
 						`endif
 					end
-					if (mcount==1 || mcount==6)
+					if (mcount==1 || mcount==5)
 						mixfeedback <= 1;
-					if (mcount == 5 || mcount == 10)
+					if (mcount == 4 || mcount == 8)
 					begin
-						mixfeedback <= 0;
+						mixfeedback <= 1'b0;
 						X0 <= X1;
 						X1 <= Xmix;
 					end
-					if (mcount == 10)
+					if (mcount == 8)
 					begin
 						mcount <= 0;
-						cycle <= cycle + 1;
+						cycle <= cycle + 11'd1;
 						if (cycle == 1023)
 						begin
 							// Pipeline the result so we can start processing the next X input
@@ -695,16 +698,16 @@ module hashcore (hash_clk, nonce_msb, nonce_out);
 				R_INT: begin
 					// Interpolate scratchpad for odd addresses
 					// Mcount has already been incremented in R_MIX
-					mcount <= mcount + 1;
-					if (mcount==1 || mcount==6)
-						mixfeedback <= 1;
-					if (mcount == 5)
+					mcount <= mcount + 6'd1;
+					if (mcount==1 || mcount==5)
+						mixfeedback <= 1'b1;
+					if (mcount == 4)
 					begin
 						mixfeedback <= 0;
 						X0 <= X1;
 						X1 <= Xmix;
 					end
-					if (mcount == 10)
+					if (mcount == 8)
 					begin
 						mixfeedback <= 0; // Required
 						X0 <= X1 ^ X0Save;	// Same result as step 0 in R_MIX

@@ -24,11 +24,9 @@
 
 module salsa (clk, feedback, B, Bx, Bo);
 
-// TODO decide on final latency configuration depending on FMax
-// eg currently onc clock per salsa_core, but could use one clock per pair or per all four
-// ... Quartus reports FMax ~30MHz so keep the latency for now and run at 25MHz
-
-// Latency 4 clock cycles, could be reduced by making salsa_core async (reduces FMax)
+// Latency 4 clock cycles, approx 40nS propagation delay (SLOW!), but pipelining
+// is pointless as we have nothing else to fill the pipe with, so it actually
+// REDUCES the throughput due to the setup/propagation delays of the registers.
 
 input clk;
 input feedback;
@@ -47,9 +45,7 @@ wire [511:0]x2;
 wire [511:0]x3;
 wire [511:0]xr;
 
-// Four salsa iterations. Currently registered so 4 clock cycles.
-// TODO Pipelining is unneccessary with registered outputs, so use a single
-// salsa_core and feed back output
+// Four salsa iterations. NB use registered salsa_core so 4 clock cycles.
 salsa_core salsa1 (clk, xx, x1);
 salsa_core salsa2 (clk, x1, x2);
 salsa_core salsa3 (clk, x2, x3);
@@ -58,21 +54,26 @@ salsa_core salsa4 (clk, x3, xr);
 
 // Feedback version
 wire [511:0]xr;
-salsa_core salsa1 (clk, feedback ? xr : xx, xr);
+reg [511:0]xrd;
+//salsa_core salsa1 (clk, feedback ? xr : xx, xr);	// unregistered xr
+salsa_core salsa1 (clk, feedback ? xrd : xx, xr);	// registered xrd
 
 genvar i;
 generate
 	for (i = 0; i < 16; i = i + 1) begin : XX
-		// Initial XOR. NB this adds to propagation delay of the first salsa, may want register it.
+		// Initial XOR. NB this adds to the propagation delay of the first salsa, may want register it.
 		assign xx[`IDX(i)] = B[`IDX(i)] ^ Bx[`IDX(i)];
-		// Final sum. This could be subsumed into the final salsa to save a clock.
+		// Final sum. This could is subsumed into the final salsa to save a clock.
 //		always @ (posedge clk)
 //		begin
 //			Bo[`IDX(i)] <= xx[`IDX(i)] + xr[`IDX(i)];
 //		end
-		assign Bo[`IDX(i)] = xx[`IDX(i)] + xr[`IDX(i)];	// Async output
+		assign Bo[`IDX(i)] = xx[`IDX(i)] + xr[`IDX(i)];	// Async output (NB bypasses xrd register)
 	end
 endgenerate
+
+always @ (posedge clk)
+	xrd <= xr;
 
 endmodule
 
@@ -80,17 +81,8 @@ module salsa_core (clk, xx, out);
 
 input clk;
 input [511:0]xx;
-output reg [511:0]out;		// Output is registered, but may want to make it async
-
-// Some debugging assignments so we can check the word format
-/*
-wire [31:0]x00;
-wire [31:0]x04;
-wire [31:0]x12;
-assign x00 = xx[`IDX(0)];
-assign x04 = xx[`IDX(4)];
-assign x12 = xx[`IDX(12)];
-*/
+// output reg [511:0]out;		// Output is registered
+output [511:0]out;				// Output is unregistered
 
 // This is clunky due to my lack of verilog skills but it works so elegance can come later
 
@@ -257,12 +249,14 @@ assign r15s = r14 + r13;
 assign r15 = c15 ^ { r15s[13:0], r15s[31:14] };
 
 
-wire [511:0]xo;			// Rename row results
-// assign xo = { r00, r01, r02, r03, r04, r05, r06, r07, r08, r09, r10, r11, r12, r13, r14, r15 };
-assign xo = { r15, r14, r13, r12, r11, r10, r09, r08, r07, r06, r05, r04, r03, r02, r01, r00 };
+assign out = { r15, r14, r13, r12, r11, r10, r09, r08, r07, r06, r05, r04, r03, r02, r01, r00 };
+
+// Registered output ...
+// wire [511:0]xo;			// Rename row results
+// assign xo = { r15, r14, r13, r12, r11, r10, r09, r08, r07, r06, r05, r04, r03, r02, r01, r00 };
 
 // Output is registered, but may want to make it async
-always @ (posedge clk)
-	out <= xo;
+// always @ (posedge clk)
+//	out <= xo;
 
 endmodule

@@ -1,4 +1,4 @@
-module main_pll (inclk0, c0);
+module main_pll # (parameter SPEED_MHZ = 25) (inclk0, c0);
 
 	input	  inclk0;
 	output	  c0;
@@ -52,9 +52,9 @@ module main_pll (inclk0, c0);
 				.vcounderrange ());
 	defparam
 		altpll_component.bandwidth_type = "AUTO",
-		altpll_component.clk0_divide_by = 10,
+		altpll_component.clk0_divide_by = 50,
 		altpll_component.clk0_duty_cycle = 50,
-		altpll_component.clk0_multiply_by = 5,		// 25MHz
+		altpll_component.clk0_multiply_by = SPEED_MHZ,
 		altpll_component.clk0_phase_shift = "0",
 		altpll_component.compensate_clock = "CLK0",
 		altpll_component.inclk0_input_frequency = 20000,

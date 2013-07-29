@@ -8,7 +8,7 @@ Project includes code from https://github.com/progranism/Open-Source-FPGA-Bitcoi
 Scrypt algorithm is based on https://github.com/ckolivas/cgminer/blob/master/scrypt.c
 Discussion is at https://forum.litecoin.net/index.php/topic,5162.0.html
 
-The scrypt algorithm is implimented using on-chip FPGA RAM, so should be portable to any
+The scrypt algorithm is implemented using on-chip FPGA RAM, so should be portable to any
 FPGA large enough to support 1024kBit of RAM (512kBit with interpolation, eg DE0-Nano).
 External RAM support could be added, but requires the relevant RAM controller for the
 board. Performance will be limited by RAM bandwidth.
@@ -20,24 +20,40 @@ since the scrypt algorithm is essentially serial. RAM is also clocked at this sp
 faster clock would help improve performance a little (and is essential for external RAM)
 at the expense of complexity.
 
-Multiple cores are best implimented using the 512kBit scratchpad as the slower individual
+Multiple cores are best implemented using the 512kBit scratchpad as the slower individual
 throughput is more than compensated by doubling the number of cores supported.
 
 Contents
 --------
-DE2-115-Single  Single core, this is the simplest implimentation. NOT TESTED as I do
-                not have a DE2_115 a board. Should be trivial to add multiple cores.
+DE2-115-Single  Single full scratchpad core, this is the simplest implementation.
+                NOT TESTED as I do not have a DE2_115 a board. Adding multiple cores
+                should be trivial (just needs a results queue, a simple example is
+				provided in ltcminer.v)
 
-DE0-Nano        Uses interpolation as the full scratchpad does not fit, which adds
-                complexity and reduces speed. TESTED and WORKS at 0.94 KHash/sec.
+DE0-Nano        Uses interpolation as the full scratchpad does not fit (this is the
+                same as LOOKAHEAD_GAP=2 in GPU). TESTED and WORKS at ...
+                1.16 kHash/sec at 25Mhz (this is Fmax at 85C/Slow model)
+                1.40 kHash/sec at 30Mhz
+                1.63 kHash/sec at 35Mhz
+                1.86 kHash/sec at 40Mhz
+                2.09 kHash/sec at 45Mhz (with a few errors/shares rejected)
+				Fmax is 25MHz, so anything greater may not work reliably on your device.
+                BEWARE the onboard psu regulators run HOT to VERY HOT. You may fry them!
 
 scripts         Mining scripts.
 
 source          Verilog source code.
 
-A Xilinx LX150 port for ngzhang's Icarus board is in development.
+A Xilinx LX150 multicore port for ngzhang's Icarus board is in development. Its working in
+simulation but uses quite a lot ngzhang's code for the interface, so needs to be checked
+for GPL compliance (teknohog's should be OK). Compilation will require an expensive Xilinx
+ISE licence (or 30 day trial). I'm currently testing with the free webpack license which
+is limited to the LX75 device.
 
 Usage
 -----
 The Altera ports (DE0-Nano) require installation of Quartus II software. For MS Windows
 set mining pool connection details by editing scripts/config.tcl then run scripts/mine.bat
+This uses getwork protocol and timeouts may occur. There are some configuration switches
+in mine.tcl, eg it can run in test mode which sends historical block headers to the fpga
+with known nonce results. Use of a stratum proxy server is recommended.

@@ -1,3 +1,8 @@
+// altera_ram.v this now takes parameter ADDRBITS to set size
+// Use ADDRBITS = 10 for 1024 words, 9 for 512 (halfram)
+// NB since I HAVE edited this file (contrary to the warning
+// below, its probably not a good idea to invoke the wizard)
+
 // megafunction wizard: %RAM: 1-PORT%
 // GENERATION: STANDARD
 // VERSION: WM1.0
@@ -36,14 +41,14 @@
 // synopsys translate_off
 `timescale 1 ps / 1 ps
 // synopsys translate_on
-module ram (
+module ram # ( parameter ADDRBITS=10 ) (
 	address,
 	clock,
 	data,
 	wren,
 	q);
 
-	input	[9:0]  address;
+	input	[ADDRBITS-1:0]  address;
 	input	  clock;
 	input	[255:0]  data;
 	input	  wren;
@@ -89,13 +94,13 @@ module ram (
 		altsyncram_component.intended_device_family = "Cyclone IV E",
 		altsyncram_component.lpm_hint = "ENABLE_RUNTIME_MOD=NO",
 		altsyncram_component.lpm_type = "altsyncram",
-		altsyncram_component.numwords_a = 1024,
+		altsyncram_component.numwords_a = 2 << (ADDRBITS-1),
 		altsyncram_component.operation_mode = "SINGLE_PORT",
 		altsyncram_component.outdata_aclr_a = "NONE",
 		altsyncram_component.outdata_reg_a = "UNREGISTERED",
 		altsyncram_component.power_up_uninitialized = "FALSE",
 		altsyncram_component.read_during_write_mode_port_a = "OLD_DATA",
-		altsyncram_component.widthad_a = 10,
+		altsyncram_component.widthad_a = ADDRBITS,
 		altsyncram_component.width_a = 256,
 		altsyncram_component.width_byteena_a = 1;
 
