@@ -28,7 +28,7 @@ Contents
 DE2-115-Single  Single full scratchpad core, this is the simplest implementation.
                 NOT TESTED as I do not have a DE2_115 a board. Adding multiple cores
                 should be trivial (just needs a results queue, a simple example is
-				provided in ltcminer.v)
+                provided in ltcminer.v)
 
 DE0-Nano        Uses interpolation as the full scratchpad does not fit (this is the
                 same as LOOKAHEAD_GAP=2 in GPU). TESTED and WORKS at ...
@@ -37,7 +37,7 @@ DE0-Nano        Uses interpolation as the full scratchpad does not fit (this is 
                 1.63 kHash/sec at 35Mhz
                 1.86 kHash/sec at 40Mhz
                 2.09 kHash/sec at 45Mhz (with a few errors/shares rejected)
-				Fmax is 25MHz, so anything greater may not work reliably on your device.
+                Fmax is 25MHz, so anything greater may not work reliably on your device.
                 BEWARE the onboard psu regulators run HOT to VERY HOT. You may fry them!
 
 scripts         Mining scripts.
@@ -54,6 +54,6 @@ Usage
 -----
 The Altera ports (DE0-Nano) require installation of Quartus II software. For MS Windows
 set mining pool connection details by editing scripts/config.tcl then run scripts/mine.bat
-This uses getwork protocol and timeouts may occur. There are some configuration switches
-in mine.tcl, eg it can run in test mode which sends historical block headers to the fpga
-with known nonce results. Use of a stratum proxy server is recommended.
+This uses getwork protocol and timeouts may occur so use of a stratum proxy server is
+recommended. There are some configuration switches in mine.tcl, eg it can run in test mode
+which sends historical block headers to the fpga with known nonce results.
