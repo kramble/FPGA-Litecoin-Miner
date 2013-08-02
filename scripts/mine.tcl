@@ -211,6 +211,8 @@ while {1} {
 			puts "$test_matches OK, $test_errors errors out of $test_total tested"
 			break
 		}
+		# Status each time is useful for large test files
+		puts "$test_matches OK, $test_errors errors out of $test_total tested"
 		set newwork [parse_work_from_file $line]
 		set test_total [expr $test_total + 1]
 	} else {
@@ -249,7 +251,7 @@ while {1} {
 		# Check golden_nonce
 		set gn [string range [reverseHex $work(data)] 96 103]
 		if { [format "%08x" $golden_nonce] != $gn } {
-			puts [format "ERROR golden nonce $gn does not match expected %08x" $golden_nonce]
+			puts [format "ERROR golden nonce %08x does not match expected $gn" $golden_nonce]
 			set test_errors [expr $test_errors + 1]
 		} else {
 			puts [format "OK golden nonce correct %08x" $golden_nonce]
