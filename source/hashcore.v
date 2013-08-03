@@ -22,7 +22,7 @@
 	
 `timescale 1ns/1ps
 
-module hashcore (hash_clk, data1, data2, data3, target, nonce_msb, nonce_out, golden_nonce_out, golden_nonce_match);
+module hashcore (hash_clk, data1, data2, data3, target, nonce_msb, nonce_out, golden_nonce_out, golden_nonce_match, loadnonce);
 
 	input hash_clk;
 	input [255:0] data1;
@@ -33,7 +33,8 @@ module hashcore (hash_clk, data1, data2, data3, target, nonce_msb, nonce_out, go
 	output [31:0] nonce_out;
 	output [31:0] golden_nonce_out;
 	output golden_nonce_match;	// Strobe valid one cycle on a match (needed for serial comms)
-
+	input loadnonce;			// Strobe loads nonce (used for serial interface)
+	
 	reg poweron_reset = 1'b1;
 	reg reset = 1'b1;
 
@@ -45,7 +46,7 @@ module hashcore (hash_clk, data1, data2, data3, target, nonce_msb, nonce_out, go
 	
 	reg [31:0] nonce_prevous_load = 32'hffffffff;	// See note in salsa mix FSM
 
-	`ifdef MULTICORE
+	`ifndef NOMULTICORE
 		reg [27:0] nonce_cnt = 28'd0;		// Multiple cores use different prefix
 		wire [31:0] nonce;
 		assign nonce = { nonce_msb, nonce_cnt };
@@ -550,9 +551,9 @@ module hashcore (hash_clk, data1, data2, data3, target, nonce_msb, nonce_out, go
 		`ifdef HALFRAM
 			oddAddr <= Xmix[0];		// Flag odd addresses (for use in next cycle due to ram latency)
 		`endif
-		if (nonce_prevous_load != data3[127:96])
+		if (loadnonce || (nonce_prevous_load != data3[127:96]))
 		begin
-			`ifndef MULTICORE
+			`ifdef NOMULTICORE
 				nonce <= data3[127:96];	// Supports loading of initial nonce for test purposes (potentially
 										// overriden by the increment below, but this occurs very rarely)
 										// This also gives a consistent start point when we send the first work
@@ -585,7 +586,7 @@ module hashcore (hash_clk, data1, data2, data3, target, nonce_msb, nonce_out, go
 							Clr_SMixInRdy <= 1;		// Ugly hack
 							// Save and increment nonce (NB done here not in SHA256 FSM)
 							nonce_1 <= nonce;
-							`ifdef MULTICORE
+							`ifndef NOMULTICORE
 								nonce_cnt <= nonce_cnt + 28'd1;
 							`else
 								nonce <= nonce + 32'd1;

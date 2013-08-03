@@ -1,4 +1,4 @@
-FPGA Litecoin (scrypt) miner ... just for the LOLs, the performance is atrocious!
+An Open Source FPGA Litecoin (scrypt) miner
 
 This code is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
 without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
@@ -21,7 +21,10 @@ faster clock would help improve performance a little (and is essential for exter
 at the expense of complexity.
 
 Multiple cores are best implemented using the 512kBit scratchpad as the slower individual
-throughput is more than compensated by doubling the number of cores supported.
+throughput is more than compensated by doubling the number of cores supported. MULTICORE
+in now the default. This only affects nonce handling so its safe to use with singe cores
+which will simply scan a more limited range (the top nibble is fixed at 0). To revert to
+the previous behaviour set the NOMULTICORE macro (but ONLY if using a single core).
 
 Contents
 --------
@@ -40,20 +43,16 @@ DE0-Nano        Uses interpolation as the full scratchpad does not fit (this is 
                 Fmax is 25MHz, so anything greater may not work reliably on your device.
                 BEWARE the onboard psu regulators run HOT to VERY HOT. You may fry them!
 
+ICARUS-LX150    A Xilinx LX150 multicore port for ngzhang's Icarus board (UNTESTED).
+
 scripts         Mining scripts.
 
 source          Verilog source code.
-
-A Xilinx LX150 multicore port for ngzhang's Icarus board is in development. Its working in
-simulation but uses quite a lot ngzhang's code for the interface, so needs to be checked
-for GPL compliance (teknohog's should be OK). Compilation will require an expensive Xilinx
-ISE licence (or 30 day trial). I'm currently testing with the free webpack license which
-is limited to the LX75 device.
 
 Usage
 -----
 The Altera ports (DE0-Nano) require installation of Quartus II software. For MS Windows
 set mining pool connection details by editing scripts/config.tcl then run scripts/mine.bat
-This uses getwork protocol and timeouts may occur so use of a stratum proxy server is
-recommended. There are some configuration switches in mine.tcl, eg it can run in test mode
-which sends historical block headers to the fpga with known nonce results.
+This uses getwork protocol and timeouts may occur. There are some configuration switches
+in mine.tcl, eg it can run in test mode which sends historical block headers to the fpga
+with known nonce results. Use of a stratum proxy server is recommended.

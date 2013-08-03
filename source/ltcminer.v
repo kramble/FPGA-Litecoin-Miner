@@ -47,6 +47,7 @@
 	reg [255:0] data1 = 256'd0;
 	reg [255:0] data2 = 256'd0;
 	reg [127:0] data3 = 128'd0;
+	// final_hash=553a4b69b43913a61b42013ce210f713eaa7332e48cda1bdf3b93b10161d0876 (NOT a match)
 `else
 	// Test data (random, not a real block)
 	// reg [255:0] data1 = 256'h1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100;
@@ -58,6 +59,7 @@
 	reg [255:0] data1 = 256'h18e7b1e8eaf0b62a90d1942ea64d250357e9a09c063a47827c57b44e01000000;
 	reg [255:0] data2 = 256'hc791d4646240fc2a2d1b80900020a24dc501ef1599fc48ed6cbac920af755756;
 	reg [127:0] data3 = 128'h0000318f7e71441b141fe951b2b0c7df;	// NB 0000318f is loaded into nonce
+	// final_hash=b303000066bd9f068aa115339cfd01cd94121ef65b2ff4d7d3796b738a174f7b (MATCH at target=000007ff/diff=32)
 `endif
 	
 	// Target ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff070000 (7ff is 2048) will match 2048/4G hashes ie 1/2097152
@@ -67,8 +69,9 @@
 	wire [31:0] golden_nonce_out;
 	wire golden_nonce_match;			// Unused in JTAG comms but needed for serial comms
 	wire [3:0] nonce_msb = 4'd0;		// Only used if MULTICORE is defined
-	
-	hashcore uut (hash_clk, data1, data2, data3, target, nonce_msb, nonce_out, golden_nonce_out, golden_nonce_match);
+	wire loadnonce = 1'b0;				// Only used in serial comms interface
+
+	hashcore uut (hash_clk, data1, data2, data3, target, nonce_msb, nonce_out, golden_nonce_out, golden_nonce_match, loadnonce);
 
 	/*
 		// Example dual core version (UNTESTED)
@@ -87,8 +90,8 @@
 		
 		assign nonce_out = nonce_out0;	// For virtual vire NONC
 
-		hashcore uut1 (hash_clk, data1, data2, data3, target, 4'd0, nonce_out0, golden_nonce_out0, golden_nonce_match0);
-		hashcore uut2 (hash_clk, data1, data2, data3, target, 4'd1, nonce_out1, golden_nonce_out1, golden_nonce_match1);
+		hashcore uut1 (hash_clk, data1, data2, data3, target, 4'd0, nonce_out0, golden_nonce_out0, golden_nonce_match0, loadnonce);
+		hashcore uut2 (hash_clk, data1, data2, data3, target, 4'd1, nonce_out1, golden_nonce_out1, golden_nonce_match1, loadnonce);
 
 		always @ (posedge hash_clk)
 		begin
