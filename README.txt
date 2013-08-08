@@ -22,7 +22,7 @@ at the expense of complexity.
 
 Multiple cores are best implemented using the 512kBit scratchpad as the slower individual
 throughput is more than compensated by doubling the number of cores supported. MULTICORE
-in now the default. This only affects nonce handling so its safe to use with singe cores
+is now the default. This only affects nonce handling so its safe to use with singe cores
 which will simply scan a more limited range (the top nibble is fixed at 0). To revert to
 the previous behaviour set the NOMULTICORE macro (but ONLY if using a single core).
 
