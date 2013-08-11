@@ -103,10 +103,10 @@ class Writer(Thread):
 			# for litecoin send 80 bytes of the 128 byte data plus 4 bytes of 32 byte target
             payload = self.target.decode('hex')[31:27:-1] + self.block.decode('hex')[79::-1]
 			
-            # TEST HASH, this should match on nonce 0000318f (NOT ACTUALLY TESTED)
+            # TEST HASH, this should match on nonce 0000318f
             # NB The pool will REJECT this share as it did not send the data...
             # UNCOMMENT the following two lines for testing...
-            # test_payload ="000000014eb4577c82473a069ca0e95703254da62e94d1902ab6f0eae8b1e718565775af20c9ba6ced48fc9915ef01c54da2200090801b2d2afc406264d491c7dfc7b0b251e91f141b44717e00000000ff070000"
+            # test_payload ="000000014eb4577c82473a069ca0e95703254da62e94d1902ab6f0eae8b1e718565775af20c9ba6ced48fc9915ef01c54da2200090801b2d2afc406264d491c7dfc7b0b251e91f141b44717e00310000ff070000"
             # payload = test_payload.decode('hex')[::-1]
 
             print("Payload " + payload.encode('hex_codec'))	# DEBUG
