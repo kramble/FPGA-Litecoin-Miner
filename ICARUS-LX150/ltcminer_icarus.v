@@ -12,24 +12,35 @@
 module ltcminer_icarus (osc_clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip);
 
 // NB SPEED_MHZ resolution is 5MHz steps to keep pll divide ratio sensible
+// You can change this in xilinx_pll.v but take care always to use valid integer
+// division ratios else the comm_clk_frequency parameter may be incorrectly set.
 `ifdef SPEED_MHZ
 	parameter SPEED_MHZ = `SPEED_MHZ;
 `else
 	parameter SPEED_MHZ = 25;
 `endif
 
-`ifdef SERIAL_CLK
-	parameter comm_clk_frequency = `SERIAL_CLK;
+//`ifdef SERIAL_CLK
+//	parameter comm_clk_frequency = `SERIAL_CLK;
+//`else
+//	parameter comm_clk_frequency = 100_000_000;
+//`endif
+
+	parameter comm_clk_frequency = SPEED_MHZ * 1_000_000;
+
+`ifdef BAUD_RATE
+	parameter BAUD_RATE = `BAUD_RATE;
 `else
-	parameter comm_clk_frequency = 100_000_000;
+	parameter BAUD_RATE = 115_200;
 `endif
 
-// kramble - since using separare clocks for uart and hasher, need clock crossing logic in hub_core
+// kramble - now using same clock for uart and hashcore
 	input osc_clk;
 	wire hash_clk, uart_clk;
 
 `ifndef SIM
-	main_pll # (.SPEED_MHZ(SPEED_MHZ)) pll_blk (.CLKIN_IN(osc_clk), .CLKFX_OUT(hash_clk), .CLK0_OUT(uart_clk));
+	main_pll # (.SPEED_MHZ(SPEED_MHZ)) pll_blk (.CLKIN_IN(osc_clk), .CLKFX_OUT(hash_clk));
+	assign uart_clk = hash_clk;
 `else
 	assign hash_clk = osc_clk;
 	assign uart_clk = osc_clk;
@@ -54,7 +65,7 @@ module ltcminer_icarus (osc_clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip)
 
 	localparam SLAVES = LOCAL_MINERS + EXT_PORTS;
 
-	wire [LOCAL_MINERS-1:0] localminer_rxd;
+	// wire [LOCAL_MINERS-1:0] localminer_rxd;	// REMOVE
 
 	input [3:0]dip;
 	wire reset, nonce_chip;
@@ -75,7 +86,7 @@ module ltcminer_icarus (osc_clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip)
 	wire		serial_send;
 	wire		serial_busy;
 	wire [31:0]	golden_nonce;
-	serial_transmit #(.comm_clk_frequency(comm_clk_frequency)) sertx (.clk(uart_clk), .TxD(TxD), .send(serial_send), .busy(serial_busy), .word(golden_nonce));
+	serial_transmit #(.comm_clk_frequency(comm_clk_frequency), .baud_rate(BAUD_RATE)) sertx (.clk(uart_clk), .TxD(TxD), .send(serial_send), .busy(serial_busy), .word(golden_nonce));
 
 	hub_core #(.SLAVES(SLAVES)) hc (.uart_clk(uart_clk), .new_nonces(new_nonces), .golden_nonce(golden_nonce), .serial_send(serial_send), .serial_busy(serial_busy), .slave_nonces(slave_nonces));
 
@@ -89,18 +100,13 @@ module ltcminer_icarus (osc_clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip)
 									// NB in my implementation, it loads the nonce from data3 which should be fine as
 									// this should be zero, but also supports testing using non-zero nonces.
 
-   // Synchronise across clock domains
-   reg rx_done_d1 = 1'b0;
-   reg rx_done_d2 = 1'b0;
    always @ (posedge hash_clk)
    begin
-	rx_done_d1 <= rx_done;
-	rx_done_d2 <= rx_done_d1;
-	if (rx_done_d2)
+	if (rx_done)
 		targetreg <= target;
    end
 								
-	serial_receive #(.comm_clk_frequency(comm_clk_frequency)) serrx (.clk(uart_clk), .RxD(RxD), .data1(data1), .data2(data2),
+	serial_receive #(.comm_clk_frequency(comm_clk_frequency), .baud_rate(BAUD_RATE)) serrx (.clk(uart_clk), .RxD(RxD), .data1(data1), .data2(data2),
 			.data3(data3), .target(target), .rx_done(rx_done));
 
    // Local miners now directly connected
@@ -112,7 +118,7 @@ module ltcminer_icarus (osc_clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip)
 	   wire [2:0] nonce_core = i;
 	   hashcore M (.hash_clk(hash_clk), .data1(data1), .data2(data2), .data3(data3), .target(targetreg),
 					.nonce_msb({nonce_chip, nonce_core}), .nonce_out(nonce_out), .golden_nonce_out(slave_nonces[i*32+31:i*32]),
-					.golden_nonce_match(new_nonces[i]), .loadnonce(rx_done_d2));
+					.golden_nonce_match(new_nonces[i]), .loadnonce(rx_done));
 	end
    endgenerate
 
@@ -126,7 +132,7 @@ module ltcminer_icarus (osc_clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip)
       genvar 		  j;
       for (j = LOCAL_MINERS; j < SLAVES; j = j + 1)
 	begin: for_ports
-   	   slave_receive #(.comm_clk_frequency(comm_clk_frequency)) slrx (.clk(uart_clk), .RxD(extminer_rxd[j-LOCAL_MINERS]), .nonce(slave_nonces[j*32+31:j*32]), .new_nonce(new_nonces[j]));
+   	   slave_receive #(.comm_clk_frequency(comm_clk_frequency), .baud_rate(BAUD_RATE)) slrx (.clk(uart_clk), .RxD(extminer_rxd[j-LOCAL_MINERS]), .nonce(slave_nonces[j*32+31:j*32]), .new_nonce(new_nonces[j]));
 	end
    endgenerate
 

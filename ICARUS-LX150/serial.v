@@ -4,14 +4,16 @@
 // GPL3, the practical difference is that instead of TxD_busy we have
 // its inverse tx_ready.
 
-module serial_receive(clk, RxD, data1, data2, data3, target, rx_done);
+module serial_receive # (
+   parameter baud_rate = 115_200,
+   parameter comm_clk_frequency = 100_000_000 )
+  ( clk, RxD, data1, data2, data3, target, rx_done );
    input      clk;
    input      RxD;
    
    wire       RxD_data_ready;
    wire [7:0] RxD_data;
 
-   parameter comm_clk_frequency = 100_000_000;
 
    `ifdef CONFIG_SERIAL_TIMEOUT
 	parameter SERIAL_TIMEOUT = `CONFIG_SERIAL_TIMEOUT;
@@ -21,7 +23,7 @@ module serial_receive(clk, RxD, data1, data2, data3, target, rx_done);
 	parameter SERIAL_TIMEOUT = 24'h800000;
    `endif
 
-   uart_receiver #(.comm_clk_frequency(comm_clk_frequency)) urx (.clk(clk), .uart_rx(RxD), .tx_new_byte(RxD_data_ready), .tx_byte(RxD_data));
+   uart_receiver #(.comm_clk_frequency(comm_clk_frequency), .baud_rate(baud_rate)) urx (.clk(clk), .uart_rx(RxD), .tx_new_byte(RxD_data_ready), .tx_byte(RxD_data));
       
    output [255:0] data1;
    output [255:0] data2;
@@ -81,8 +83,10 @@ module serial_receive(clk, RxD, data1, data2, data3, target, rx_done);
    
 endmodule // serial_receive
 
-module serial_transmit (clk, TxD, busy, send, word);
-   parameter comm_clk_frequency = 100_000_000;
+module serial_transmit # (
+   parameter baud_rate = 115_200,
+   parameter comm_clk_frequency = 100_000_000 )
+  (clk, TxD, busy, send, word);
    
    // split 4-byte output into bytes
 
@@ -135,6 +139,6 @@ module serial_transmit (clk, TxD, busy, send, word);
 	  end
      end
 
-   uart_transmitter #(.comm_clk_frequency(comm_clk_frequency)) utx (.clk(clk), .uart_tx(TxD), .rx_new_byte(TxD_start), .rx_byte(out_byte), .tx_ready(TxD_ready));
+   uart_transmitter #(.comm_clk_frequency(comm_clk_frequency), .baud_rate(baud_rate)) utx (.clk(clk), .uart_tx(TxD), .rx_new_byte(TxD_start), .rx_byte(out_byte), .tx_ready(TxD_ready));
 
 endmodule // serial_send

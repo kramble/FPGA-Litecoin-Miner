@@ -23,8 +23,9 @@ NET "dip[2]" LOC = "C6";
 NET "dip[3]" LOC = "C8";
 
 NET "hash_clk" TNM_NET = hash_clk;
-NET "uart_clk" TNM_NET = uart_clk;
-TIMESPEC TS_uart_clk = PERIOD "uart_clk" 10 ns HIGH 50 %;
+# NET "uart_clk" TNM_NET = uart_clk;
+
 # kramble 25MHz hash_clk
 TIMESPEC TS_hash_clk = PERIOD "hash_clk" 40.0 ns HIGH 50 %;
+# TIMESPEC TS_uart_clk = PERIOD "uart_clk" 10 ns HIGH 50 %;
 
