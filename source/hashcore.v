@@ -44,7 +44,9 @@ module hashcore (hash_clk, data1, data2, data3, target, nonce_msb, nonce_out, go
 		reset <= poweron_reset;			// Ensures a full clock cycle for reset
 	end
 	
+	`ifndef ICARUS
 	reg [31:0] nonce_prevous_load = 32'hffffffff;	// See note in salsa mix FSM
+	`endif
 
 	`ifndef NOMULTICORE
 		reg [27:0] nonce_cnt = 28'd0;		// Multiple cores use different prefix
@@ -551,7 +553,11 @@ module hashcore (hash_clk, data1, data2, data3, target, nonce_msb, nonce_out, go
 		`ifdef HALFRAM
 			oddAddr <= Xmix[0];		// Flag odd addresses (for use in next cycle due to ram latency)
 		`endif
+		`ifdef ICARUS
+		if (loadnonce)				// Separate clock domains means comparison is unsafe
+		`else
 		if (loadnonce || (nonce_prevous_load != data3[127:96]))
+		`endif
 		begin
 			`ifdef NOMULTICORE
 				nonce <= data3[127:96];	// Supports loading of initial nonce for test purposes (potentially
@@ -563,7 +569,9 @@ module hashcore (hash_clk, data1, data2, data3, target, nonce_msb, nonce_out, go
 				nonce_cnt <= data3[123:96];	// The 4 msb of nonce are hardwired in MULTICORE mode, so test nonce
 											// needs to be <= 0fffffff and will only match in the 0 core
 			`endif
+			`ifndef ICARUS
 			nonce_prevous_load <= data3[127:96];
+			`endif
 		end
 		if (reset == 1'b1)
 			mstate <= R_IDLE;

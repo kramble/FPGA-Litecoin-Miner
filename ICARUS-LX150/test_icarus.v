@@ -26,17 +26,16 @@ module test_ltcminer ();
 	// final_hash (if SIM is defined) at 188,000 nS with golden_nonce_match flag NOT set since it is
 	// not a diff=32 share. To test golden_nonce, just tweak the target eg 31'hffffffff will match everything
 	
-	// With serial input (at SPEED_MHZ=1), we get rx_done at t=70,220nS, however there is already a
+	// With serial input(at comm_clk_frequency=1_000_000), we get rx_done at t=70,220nS, however there is already a
 	// PBKDF2_SHA256_80_128 loaded in Xbuf (for nonce=00000001). The first final_hash at 188,000 nS is corrupted as
 	// the input data has changed from all 0's. The Xbuf starts salsa rom at t=188,000 but the nonce is incorrectly
 	// taken from the newly loaded data so once salsa in complete it also generates a corrupt final_hash at ~362,000 nS.
-    // Nonce is incremented then the newly loaded data starts PBKDF2_SHA256_80_128, so we must supply a nonce 1 less
+	// Nonce is incremented then the newly loaded data starts PBKDF2_SHA256_80_128, so we must supply a nonce 1 less
 	// than the expected golden_nonce. The correct PBKDF2_SHA256_80_128 is ready at ~ 197,000 nS. We get final_hash for
-	// the corrupted work at ~362,000 nS then our required golden_nonce is at ~ 536,200 nS.
+	// the corrupted work at ~362,000 nS then our required golden_nonce is at 536,180 nS.
 	// This is only really a problem for simulation. With live hashing we just lose 2 nonces every time getwork is
 	// loaded, which isn't a big deal.
-	
-	
+		
 	wire RxD;
 	wire TxD;
 	wire extminer_rxd = 0;
@@ -44,10 +43,10 @@ module test_ltcminer ();
 	wire [3:0] dip = 0;
 	wire [3:0] led;
 	
-	// parameter SPEED_MHZ = 100;		// Nominal clock matching 10nS clk cycle defined below
-	parameter SPEED_MHZ = 1;			// Speeds up serial loading enormously rx_done is at t=70,220nS
+	parameter comm_clk_frequency = 1_000_000;	// Speeds up serial loading enormously rx_done is at t=70,220nS
+	parameter baud_rate = 115_200;
 	
-	ltcminer_icarus #(.SPEED_MHZ(SPEED_MHZ)) uut (clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip);
+	ltcminer_icarus #(.comm_clk_frequency(comm_clk_frequency)) uut (clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip);
 
 	// Send serial data - 84 bytes, matches on nonce 318f (included in data)
 	// NB starting nonce is 381e NOT 381f (see note above)
@@ -58,13 +57,10 @@ module test_ltcminer ();
 	reg [31:0]	data_32 = 0;
 	reg [31:0]	start_cycle = 0;
 
-	parameter comm_clk_frequency = SPEED_MHZ * 1_000_000;
-	parameter baud_rate = 115_200;
-	
 	serial_transmit #(.comm_clk_frequency(comm_clk_frequency), .baud_rate(baud_rate)) sertx (.clk(clk), .TxD(RxD), .send(serial_send), .busy(serial_busy), .word(data_32));
 
-	// TUNE this according to SPEED_MHZ so we send a single getwork (else it gets overwritten with 0's)
-	parameter stop_cycle = 7020;		// For SPEED_MHZ=1
+	// TUNE this according to comm_clk_frequency so we send a single getwork (else it gets overwritten with 0's)
+	parameter stop_cycle = 7020;		// For comm_clk_frequency=1_000_000
 	always @ (posedge clk)
 	begin
 		serial_send <= 0;				// Default
@@ -78,7 +74,5 @@ module test_ltcminer ();
 			start_cycle <= cycle;		// Remember each start cycle (makes debugging easier)
 		end
 	end
-	
 
 endmodule
-
