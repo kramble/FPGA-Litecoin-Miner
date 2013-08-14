@@ -23,7 +23,7 @@ module ltcminer_icarus (osc_clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip)
 `ifdef SERIAL_CLK
 	parameter comm_clk_frequency = `SERIAL_CLK;
 `else
-	parameter comm_clk_frequency = 100_000_000;
+	parameter comm_clk_frequency = 12_500_000;		// 100MHz divide 8
 `endif
 
 `ifdef BAUD_RATE
@@ -37,7 +37,7 @@ module ltcminer_icarus (osc_clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip)
 	wire hash_clk, uart_clk;
 
 `ifndef SIM
-	main_pll # (.SPEED_MHZ(SPEED_MHZ)) pll_blk (.CLKIN_IN(osc_clk), .CLKFX_OUT(hash_clk), .CLK0_OUT(uart_clk));
+	main_pll # (.SPEED_MHZ(SPEED_MHZ)) pll_blk (.CLKIN_IN(osc_clk), .CLKFX_OUT(hash_clk), .CLKDV_OUT(uart_clk));
 `else
 	assign hash_clk = osc_clk;
 	assign uart_clk = osc_clk;

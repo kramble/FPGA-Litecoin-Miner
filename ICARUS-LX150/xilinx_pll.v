@@ -29,18 +29,21 @@ module main_pll # (parameter SPEED_MHZ = 25 )
              CLKIN_IBUFG_OUT, 
              CLK0_OUT, 
              CLKFX_OUT, 
+			 CLKDV_OUT,
              LOCKED_OUT);
 
     input CLKIN_IN;
    output CLKIN_IBUFG_OUT;
    output CLK0_OUT;
    output CLKFX_OUT;
+   output CLKDV_OUT;
    output LOCKED_OUT;
    
    wire CLKFB_IN;
    wire CLKIN_IBUFG;
    wire CLK0_BUF;
-   wire CLK2X_BUF;
+   wire CLKFX_BUF;
+   wire CLKDV_BUF;
    wire GND_BIT;
    
    assign GND_BIT = 0;
@@ -52,7 +55,9 @@ module main_pll # (parameter SPEED_MHZ = 25 )
                         .O(CLKFB_IN));
    BUFG  CLKFX_BUFG_INST (.I(CLKFX_BUF), 
                          .O(CLKFX_OUT));
-   DCM_SP #( .CLK_FEEDBACK("1X"), .CLKDV_DIVIDE(2.0), .CLKFX_DIVIDE(20),
+   BUFG  CLKDV_BUFG_INST (.I(CLKDV_BUF), 
+                         .O(CLKDV_OUT));
+   DCM_SP #( .CLK_FEEDBACK("1X"), .CLKDV_DIVIDE(8.0), .CLKFX_DIVIDE(20),
          .CLKFX_MULTIPLY(SPEED_MHZ/5), .CLKIN_DIVIDE_BY_2("FALSE"), 
          .CLKIN_PERIOD(10.000), .CLKOUT_PHASE_SHIFT("NONE"), 
          .DESKEW_ADJUST("SYSTEM_SYNCHRONOUS"), .DFS_FREQUENCY_MODE("LOW"), 
@@ -65,7 +70,7 @@ module main_pll # (parameter SPEED_MHZ = 25 )
                        .PSEN(GND_BIT), 
                        .PSINCDEC(GND_BIT), 
                        .RST(GND_BIT), 
-                       .CLKDV(), 
+                       .CLKDV(CLKDV_BUF), 
                        .CLKFX(CLKFX_BUF), 
                        .CLKFX180(), 
                        .CLK0(CLK0_BUF), 
