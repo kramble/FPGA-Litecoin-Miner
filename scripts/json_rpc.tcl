@@ -21,7 +21,8 @@ proc get_work {url userpass} {
 		set json_dict [do_rpc_request $url $userpass "{\"method\": \"getwork\", \"params\": \[\], \"id\":0}"]
 		set json_result [dict get $json_dict result]
 
-		set work(midstate) [dict get $json_result midstate]
+		# Midstate is not needed and breaks stratum proxy started -nm ...
+		# set work(midstate) [dict get $json_result midstate]
 		set work(data) [dict get $json_result data]
 		set work(target) [dict get $json_result target]
 	} exc] {
