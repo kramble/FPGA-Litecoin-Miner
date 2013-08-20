@@ -26,7 +26,18 @@
 	module ltcminer (osc_clk, LEDS_out);
 `endif
 	
-	parameter SPEED_MHZ = 25;		// Sets PLL hash_clk speed (1MHz resolution)
+`ifdef SPEED_MHZ
+	parameter SPEED_MHZ = `SPEED_MHZ;
+`else
+	parameter SPEED_MHZ = 25;
+`endif
+
+// LOCAL_MINERS determinse the number of cores (the terminology is consistent with the LX150 port)
+`ifdef LOCAL_MINERS
+	parameter LOCAL_MINERS = `LOCAL_MINERS;
+`else
+	parameter LOCAL_MINERS = 1;
+`endif
 
 	input osc_clk;
 `ifndef NOLEDS
@@ -49,59 +60,81 @@
 	reg [127:0] data3 = 128'd0;
 	// final_hash=553a4b69b43913a61b42013ce210f713eaa7332e48cda1bdf3b93b10161d0876 (NOT a match)
 `else
-	// Test data (random, not a real block)
-	// reg [255:0] data1 = 256'h1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100;
-	// reg [255:0] data2 = 256'h3f3e3d3c3b3a393837363534333231302f2e2d2c2b2a29282726252423222120;
-	// reg [127:0] data3 = 128'h000000004b4a49484746454443424140;	// NB 00000000 is loaded into nonce
-	// final_hash=16d170aec022c94d5819933902015545da66245a9af20df542b28759400b5698 (NOT a match)
-
-	// Live test data (MATCH nonce 0000318f)
+	// Test data (MATCH nonce 0000318f)
 	reg [255:0] data1 = 256'h18e7b1e8eaf0b62a90d1942ea64d250357e9a09c063a47827c57b44e01000000;
 	reg [255:0] data2 = 256'hc791d4646240fc2a2d1b80900020a24dc501ef1599fc48ed6cbac920af755756;
 	reg [127:0] data3 = 128'h0000318f7e71441b141fe951b2b0c7df;	// NB 0000318f is loaded into nonce
 	// final_hash=b303000066bd9f068aa115339cfd01cd94121ef65b2ff4d7d3796b738a174f7b (MATCH at target=000007ff/diff=32)
 `endif
 	
-	// Target ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff070000 (7ff is 2048) will match 2048/4G hashes ie 1/2097152
 	reg [31:0] target = 31'h000007ff;	// Default to diff=32 for sane startup, this is overwritten by virtual_wire
 
+	wire [31:0]golden_nonce_out;
 	wire [31:0] nonce_out;
-	wire [31:0] golden_nonce_out;
-	wire golden_nonce_match;			// Unused in JTAG comms but needed for serial comms
-	wire [3:0] nonce_msb = 4'd0;		// Only used if MULTICORE is defined
 	wire loadnonce = 1'b0;				// Only used in serial comms interface
+	wire [LOCAL_MINERS*32-1:0] golden_nonce_i;
+	wire [LOCAL_MINERS-1:0] golden_nonce_match;
 
-	hashcore uut (hash_clk, data1, data2, data3, target, nonce_msb, nonce_out, golden_nonce_out, golden_nonce_match, loadnonce);
-
-	/*
-		// Example dual core version (UNTESTED)
-		// NB must define MULTICORE to enable nonce_msb, set it in assignments/settings/Verilog HDL Input/HDL Macro
-		// or just add to ltcminer.qsf ... set_global_assignment -name VERILOG_MACRO "MULTICORE=1"
-
-		reg [31:0] golden_nonce_out = 31'd0;
-		wire [31:0] nonce_out;
-
-		wire [31:0] nonce_out0;
-		wire [31:0] golden_nonce_out0;
-		wire golden_nonce_match0;
-		wire [31:0] nonce_out1;
-		wire [31:0] golden_nonce_out1;
-		wire golden_nonce_match1;
+	generate
+		genvar i;
+		for (i = 0; i < LOCAL_MINERS; i = i + 1)
+		begin: for_local_miners
+			wire [31:0] nonce_out_i;
+			wire [3:0] nonce_core = i;
 		
-		assign nonce_out = nonce_out0;	// For virtual vire NONC
-
-		hashcore uut1 (hash_clk, data1, data2, data3, target, 4'd0, nonce_out0, golden_nonce_out0, golden_nonce_match0, loadnonce);
-		hashcore uut2 (hash_clk, data1, data2, data3, target, 4'd1, nonce_out1, golden_nonce_out1, golden_nonce_match1, loadnonce);
-
-		always @ (posedge hash_clk)
-		begin
-			// Very simple queue, just latch most recent result
-			if (golden_nonce_match0)
-				golden_nonce_out <= golden_nonce_out0;
-			if (golden_nonce_match1)
-				golden_nonce_out <= golden_nonce_out1;
+			hashcore M (hash_clk, data1, data2, data3, target, nonce_core, nonce_out_i, golden_nonce_i[(i+1)*32-1:i*32], golden_nonce_match[i], loadnonce);
+			
+			if (i==0)
+				assign nonce_out = nonce_out_i;	// NB mining script will under-report hash rate by factor of LOCAL_MINERS
+												// TODO correctabe by a simple shift here of log2(LOCAL-MINERS)
 		end
-	*/
+	endgenerate
+	
+	// Simple queue as virtual_wire just reports current value of golden_nonce
+	
+	// What I want here is a parameterised, one-hot (priority) selected multiplexor, but since
+	// my verilog is not very good, I'll just reuse the hub_core code instead
+	
+	reg [LOCAL_MINERS-1:0]new_nonces_flag = 0;
+   
+	function integer clog2;		// Courtesy of razorfishsl, replaces $clog2() - needed for ISE < 14.1
+	input integer value;
+	begin
+		value = value-1;
+		for (clog2=0; value>0; clog2=clog2+1)
+		value = value>>1;
+	end
+	endfunction
+
+	reg [clog2(LOCAL_MINERS)+1:0] port_counter = 0;
+	reg [LOCAL_MINERS*32-1:0] nonces_shifted = 0;
+	assign golden_nonce_out = nonces_shifted[31:0];
+
+	// Mark nonces to be cleared during next clock cycle
+	reg [LOCAL_MINERS-1:0] clear_nonces = 0;
+
+	always @(posedge hash_clk)
+	begin
+		// Raise flags when new nonces appear; lower those that have been sent
+		new_nonces_flag <= (new_nonces_flag & ~clear_nonces) | golden_nonce_match;
+
+		if (port_counter == LOCAL_MINERS-1)
+			port_counter <= 0;
+		else
+			port_counter <= port_counter + 1;
+		
+		// kramble - the optimiser removes all but the low 32 bits of nonces_shifted since
+		// the following code implements a multiplexor on nonces input, NOT an actual shifter.
+		if (new_nonces_flag[port_counter])
+		begin
+			nonces_shifted <= golden_nonce_i >> port_counter*32;
+			clear_nonces[port_counter] <= 1;
+		end
+		else 
+		begin
+			clear_nonces <= 0;
+		end
+	end
 	
 	`ifndef SIM
 
@@ -109,8 +142,9 @@
 	wire [255:0] data1_vw;
 	wire [255:0] data2_vw;
 	wire [127:0] data3_vw;		// 96 bits actually used, the extra 32 are the nonce, normally all zeros but for
-								// testing we can supply a nonce which will be loaded
-	wire [31:0] target_vw;		// This depends on the pool, but should be constant once sent
+								// testing we can supply a nonce which will be loaded. Some pools set a non-zero nonce
+								// in getwork (which we will load), but this is of no consequence to live mining.
+	wire [31:0] target_vw;		// This depends on the pool, variable diff pools will update the target dynamically
 
 	virtual_wire # (.PROBE_WIDTH(0), .WIDTH(256), .INSTANCE_ID("DAT1")) data1_vw_blk(.probe(), .source(data1_vw));
 	virtual_wire # (.PROBE_WIDTH(0), .WIDTH(256), .INSTANCE_ID("DAT2")) data2_vw_blk(.probe(), .source(data2_vw));
