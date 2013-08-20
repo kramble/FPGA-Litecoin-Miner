@@ -29,3 +29,12 @@ Contents
 --------
 
 hashvariant-A.v    Uses RAM to reduce register count by eliminating X0Save, X1Save
+
+hashvariant-B.v    Pipelined 2x clock speed (NOT interleaving hashes). NB performance is
+                   halved due to the need for 2 clocks per salsa-mix. Uses salsa-B.v
+				   
+hashvariant-C.v    As B, but pushes two hashes simultaneously through the pipeline. Also
+                   uses salsa-B.v NB This is a prototype design, the hash scheduling FSM
+                   is totally INSANE (a tribute to NASA's skycrane perhaps). I'll do a
+                   more sensible implementation later. I'll extend this to a full eight
+                   stage pipeline in the next version.
