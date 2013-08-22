@@ -38,6 +38,7 @@ proc push_work_to_fpga {workl} {
 	global testmode
 	global test_prevnonce
 	global prevtarget
+	global diff
 	
 	array set work $workl
 
@@ -80,6 +81,8 @@ proc push_work_to_fpga {workl} {
 	# Only write target the first time (and if it subsequently changes)
 	if { $prevtarget != $target } {
 		write_instance "TARG" $target
+		set diff [expr 0x0000ffff / 0x$target ]
+		puts "new target $target diff $diff"
 	}
 	
 	if { $verbose } {
