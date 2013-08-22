@@ -50,6 +50,8 @@ set test_matches 0
 set test_errors 0
 set test_prevnonce 0
 set prevtarget "none"
+# Diff is just used for reporting, calculated from target so this is overwritten
+set diff 32
 
 proc say_line {msg} {
 	set t [clock format [clock seconds] -format "%D %T"]
@@ -88,7 +90,7 @@ proc wait_for_golden_ticket {timeout} {
 	global total_accepted
 	global total_rejected
 	global global_start_time
-
+	global diff
 	
 	#puts "Current nonce"
 	#set current_nonce [read_instance GNON]
@@ -133,11 +135,15 @@ proc wait_for_golden_ticket {timeout} {
 			# set rate [expr {$nonces / ($dt * 1000.0)}]
 			set rate [expr {$nonces / ($dt * 1.0)}]
 			set current_time [clock seconds]
+			
 			# Adding 0.00001 to the denom is a quick way to avoid divide by zero :P
+			
 			# BTC: each share is worth ~(2^32 / 1,000,000) MH/s
 			# set est_rate [expr {($total_accepted + $total_rejected) * 4294.967296 / ($current_time - $global_start_time + 0.00001)}]
+			
 			# LTC: each share is worth ~(2^32 / 0x7ff / 1,000) kH/s ... sort of a guess really
-			set est_rate [expr {($total_accepted + $total_rejected) * 2098.76 / ($current_time - $global_start_time + 0.00001)}]
+			# Difficulty is calculated from target ...
+			set est_rate [expr {($total_accepted + $total_rejected) * 65.59 * $diff / ($current_time - $global_start_time + 0.00001)}]
 
 			say_status $rate $est_rate $total_accepted $total_rejected $current_nonce
 		}
@@ -179,7 +185,12 @@ puts " --- FPGA Mining Tcl Script --- \n\n"
 
 if { $testmode } {
 	puts "INFO Running in TEST mode, reading from test_data.txt\n"
+	# Short test set
 	set testfp [open "test_data.txt" r]
+	# 1000 from ltc blockchain all valid
+	#set testfp [open "test_data_full.txt" r]
+	# Removed nonces > 0x0fffffff for multicore builds
+	#set testfp [open "test_data_cut.txt" r]
 }
 
 puts "Looking for and preparing FPGAs...\n"
