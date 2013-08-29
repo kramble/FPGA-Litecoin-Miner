@@ -29,21 +29,15 @@ the previous behaviour set the NOMULTICORE macro (but ONLY if using a single cor
 Contents
 --------
 DE2-115-Single  Single full scratchpad core, this is the simplest implementation.
-                NOT TESTED as I do not have a DE2_115 a board. Adding multiple cores
-                should be trivial (just needs a results queue, a simple example is
-                provided in ltcminer.v)
 
 DE0-Nano        Uses interpolation as the full scratchpad does not fit (this is the
-                same as LOOKAHEAD_GAP=2 in GPU). TESTED and WORKS at ...
+                same as LOOKAHEAD_GAP=2 in GPU). Test results ...
                 1.16 kHash/sec at 25Mhz (this is Fmax at 85C/Slow model)
-                1.40 kHash/sec at 30Mhz
-                1.63 kHash/sec at 35Mhz
-                1.86 kHash/sec at 40Mhz
-                2.09 kHash/sec at 45Mhz (with a few errors/shares rejected)
+                2.09 kHash/sec at 45Mhz
                 Fmax is 25MHz, so anything greater may not work reliably on your device.
                 BEWARE the onboard psu regulators run HOT to VERY HOT. You may fry them!
 
-ICARUS-LX150    A Xilinx LX150 multicore port for ngzhang's Icarus board (UNTESTED).
+ICARUS-LX150    A Xilinx LX150 multicore port for ngzhang's Icarus/Lancelot boards.
 
 scripts         Mining scripts.
 
