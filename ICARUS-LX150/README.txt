@@ -1,7 +1,4 @@
-This is a multicore proof of concept litecoin miner for ngzhang's Icarus board.
-
-It is UNTESTED as I have neither an Icarus board to test on, nor an LX150 Xilinx ISE
-license to compile it (but I have simulated and done a test compilation on an LX75).
+This is a multicore proof of concept litecoin miner for ngzhang's Icarus/Lancelot board.
 
 I targeted this board as it is well documented at https://github.com/ngzhang/Icarus
 
@@ -24,4 +21,14 @@ of the slots in the mix scratchpad which would complicate the FSM considerably).
 
 A custom driver is needed as we use the full block header, not midstate. This is based on
 miner.py from the original fpgaminer xilinx project, modified to send the full 80 bytes of
-the block header plus the target so as to support variable difficulty pools (UNTESTED).
+the block header plus the target so as to support variable difficulty pools.
+
+Test results on dual-fpga Lancelot RevB board, using stratum proxy server with askrate of
+2 seconds, measured at pool using conversion kHash/sec = (diff_1_shares/hr * 65536 / 3.6M)
+
+Default 2 core, full scratchpad,        25MHz gives  6.2 kHash/sec (1.55kH/s per core)
+... NB Theoretical speed should be 1.45kH/s per full scratchpad core, 1.16 for halfram.
+HashVariant-C 2 core, full scratchpad,  40MHz gives  8.8 kHash/sec (2.20kH/s per core)
+HashVariant-C overclocked (Fmax 47MHz), 60MHz gives 11.8 kHash/sec (2.95kH/s per core)
+Somewhat better performance (up to 3.3kH/s per core) has been reported by more expert
+Xilinx PlanAhead users.
