@@ -11,14 +11,17 @@ host = "mining-foreman.org"	# Getwork
 user = "username.1"		# Your worker goes here
 password = "password"	# Worker password, NOT your account password
 http_port = "10341"		# Getwork port.
+# http_port = "8332"	# Getwork port (stratum)
 
 # CONFIGURATION - CHANGE THIS (eg try COM1, COM2, COM3, COM4 etc)
 serial_port = "COM4"
-# serial_port = "/dev/ttyAMA0"	# raspberry pi
+# serial_port = "/dev/ttyUSB0"	# raspberry pi
 
 # CONFIGURATION - how often to refresh work. 20 seconds is fine, but work is
-# not initially fetched until this timeout expires. Reduce it for debugging.
-askrate = 20
+# not initially fetched until this timeout expires. Reduce it for debugging
+# and for stratum (2 works fine).
+askrate = 20	# Getwork
+# askrate = 2	# Stratum
 
 ###############################################################################
 
@@ -32,7 +35,8 @@ def stats(count, starttime):
     # BTC 2**32 hashes per share (difficulty 1)
     # mhshare = 4294.967296
     # LTC 2**32 / 2048 hashes per share (difficulty 32)
-    khshare = 2097.152	# CHECK THIS !!
+    # khshare = 2097.152	# CHECK THIS !!
+    khshare = 65.536 * writer.diff
 
     s = sum(count)
     tdelta = time() - starttime
@@ -82,6 +86,7 @@ class Writer(Thread):
         # first getwork
         self.block = "0" * 256
         self.target = "0" * 56 + "ff070000"
+        self.diff = 32	# NB This is updated from target
 
         self.daemon = True
 
@@ -98,6 +103,9 @@ class Writer(Thread):
 
             # print("block " + self.block + " target " + self.target)	# DEBUG
 
+            sdiff = self.target.decode('hex')[31:27:-1]
+            self.diff  = 65536 / int(sdiff.encode('hex'), 16) 
+			
             print("Sending data to FPGA")	# DEBUG
 
 			# for litecoin send 80 bytes of the 128 byte data plus 4 bytes of 32 byte target
@@ -181,7 +189,6 @@ results_queue = Queue()
 # http://pyserial.sourceforge.net/shortintro.html#opening-serial-ports
 
 ser = Serial(serial_port, 115200, timeout=askrate)
-# ser = Serial(serial_port, 4800, timeout=askrate)	# TEST on raspberry pi
 
 reader = Reader()
 writer = Writer()
