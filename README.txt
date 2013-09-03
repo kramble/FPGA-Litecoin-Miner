@@ -8,6 +8,11 @@ Project includes code from https://github.com/progranism/Open-Source-FPGA-Bitcoi
 Scrypt algorithm is based on https://github.com/ckolivas/cgminer/blob/master/scrypt.c
 Discussion is at https://forum.litecoin.net/index.php/topic,5162.0.html
 
+Special thanks to fpgaminer for the original bitcoin mining code, teknohog for his
+LX150 code, also OrphanedGland, udif, TheSeven, makomk, and newMeat1 as credited on
+the fpgaminer bitcoin thread https://bitcointalk.org/index.php?topic=9047.0 and ngzhang
+for his Icarus/Lancelot boards and github.
+
 The scrypt algorithm is implemented using on-chip FPGA RAM, so should be portable to any
 FPGA large enough to support 1024kBit of RAM (512kBit with interpolation, eg DE0-Nano).
 External RAM support could be added, but requires the relevant RAM controller for the
@@ -36,6 +41,8 @@ DE0-Nano        Uses interpolation as the full scratchpad does not fit (this is 
                 2.09 kHash/sec at 45Mhz
                 Fmax is 25MHz, so anything greater may not work reliably on your device.
                 BEWARE the onboard psu regulators run HOT to VERY HOT. You may fry them!
+
+experimental    New code, not all fully working.
 
 ICARUS-LX150    A Xilinx LX150 multicore port for ngzhang's Icarus/Lancelot boards.
 

@@ -1,0 +1,55 @@
+# Based on https://github.com/ngzhang/Icarus/blob/master/FPGA_project/Src/fpgaminer_top.ucf
+NET "osc_clk" LOC = J1;
+
+# serial port receive & transmit
+NET "RxD" LOC = D1;
+NET "TxD" LOC = B1;
+
+# TTL level serial port: ja3 = rxd, ja2 = txd
+NET "extminer_txd[0]" LOC = D22;
+NET "extminer_rxd[0]" LOC = B22;
+
+# Button 0
+//NET "reset" LOC = "A4";
+
+NET "led[0]" LOC = A18;
+NET "led[1]" LOC = B18;
+NET "led[2]" LOC = A17;
+NET "led[3]" LOC = A16;
+
+NET "dip[0]" LOC = A4;
+NET "dip[1]" LOC = D6;
+NET "dip[2]" LOC = C6;
+NET "dip[3]" LOC = C8;
+
+NET "TMP_SCL" LOC = C1;
+NET "TMP_SDA" LOC = E1;
+NET "TMP_ALERT" LOC = C3;
+
+NET "hash_clk" TNM_NET = "hash_clk";
+NET "uart_clk" TNM_NET = "uart_clk";
+
+# 25MHz hash_clk
+TIMESPEC TS_hash_clk = PERIOD "hash_clk" 40 ns HIGH 50 % INPUT_JITTER 7 ps;
+# 12.5MHz uart_clk
+TIMESPEC TS_uart_clk = PERIOD "uart_clk" 80 ns HIGH 50 %;
+
+NET "TMP_ALERT" IOSTANDARD = LVCMOS33;
+NET "TMP_ALERT" PULLUP;
+NET "TMP_SDA" IOSTANDARD = LVCMOS33;
+NET "TMP_SDA" PULLUP;
+NET "TMP_SCL" PULLUP;
+NET "TMP_SCL" IOSTANDARD = LVCMOS33;
+NET "dip[3]" IOSTANDARD = LVCMOS33;
+NET "led[3]" IOSTANDARD = LVCMOS33;
+NET "dip[2]" IOSTANDARD = LVCMOS33;
+NET "dip[1]" IOSTANDARD = LVCMOS33;
+NET "TxD" IOSTANDARD = LVCMOS33;
+NET "osc_clk" IOSTANDARD = LVCMOS33;
+NET "led[2]" IOSTANDARD = LVCMOS33;
+NET "extminer_rxd[0]" IOSTANDARD = LVCMOS33;
+NET "dip[0]" IOSTANDARD = LVCMOS33;
+NET "RxD" IOSTANDARD = LVCMOS33;
+NET "extminer_txd[0]" IOSTANDARD = LVCMOS33;
+NET "led[0]" IOSTANDARD = LVCMOS33;
+NET "led[1]" IOSTANDARD = LVCMOS33;
