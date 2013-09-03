@@ -35,6 +35,8 @@ hashvariant-B.v    Pipelined 2x clock speed (NOT interleaving hashes). NB perfor
 				   
 hashvariant-C.v    As B, but pushes two hashes simultaneously through the pipeline. Also
                    uses salsa-B.v NB This is a prototype design, the hash scheduling FSM
-                   is totally INSANE (a tribute to NASA's skycrane perhaps). I'll do a
-                   more sensible implementation later. I'll extend this to a full eight
-                   stage pipeline in the next version.
+                   is totally INSANE (a tribute to NASA's skycrane perhaps).
+
+LX150_SPLIT        Separates the pbkdf and salsa engines into separate modules linked by
+                   a one bit serial bus to reduce routing congestion. This will form the
+                   basis of ongoing work on further pipelining of the salsa.

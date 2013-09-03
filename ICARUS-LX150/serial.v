@@ -40,11 +40,17 @@ module serial_receive # (
    reg [23:0]  timer = 0;
 
    // ltcminer.py sends target first then data
+`ifdef SIM	// Sane data for simulation - NB disable if simulating serial data loading
+   assign target = input_copy[671:640];		// Not needed since no RxD_data_ready strobe to load targetreg
+   assign data1 = 256'h18e7b1e8eaf0b62a90d1942ea64d250357e9a09c063a47827c57b44e01000000;
+   assign data2 = 256'hc791d4646240fc2a2d1b80900020a24dc501ef1599fc48ed6cbac920af755756;
+   assign data3 = 128'h0000318f7e71441b141fe951b2b0c7df;	// NB 0000318f is loaded into nonce
+`else   
    assign target = input_copy[671:640];
    assign data3 = input_copy[639:512];
    assign data2 = input_copy[511:256];
    assign data1 = input_copy[255:0];
-
+`endif
    // kramble: changed this as clock crossing requires timing consistency so
    // rx_done is now registered and strobes in sync with the data output
    // hence the following is no longer true...
