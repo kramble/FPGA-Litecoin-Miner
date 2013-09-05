@@ -86,7 +86,7 @@ class Writer(Thread):
         # first getwork
         self.block = "0" * 256
         self.target = "0" * 56 + "ff070000"
-        self.diff = 32	# NB This is updated from target
+        self.diff = 2	# NB This is updated from target (default 2 is safer than 32 to avoid losing shares)
 
         self.daemon = True
 
@@ -104,7 +104,13 @@ class Writer(Thread):
             # print("block " + self.block + " target " + self.target)	# DEBUG
 
             sdiff = self.target.decode('hex')[31:27:-1]
-            self.diff  = 65536 / int(sdiff.encode('hex'), 16) 
+            intTarget = int(sdiff.encode('hex'), 16)
+            if (intTarget < 1):
+                print "WARNING zero target", intTarget
+                print "target", self.target
+                print("sdiff", sdiff)	# NB Need brackets here else prints binary
+            else:
+                self.diff  = 65536 / intTarget
 			
             print("Sending data to FPGA")	# DEBUG
 
