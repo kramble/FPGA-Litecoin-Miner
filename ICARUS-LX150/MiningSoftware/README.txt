@@ -27,4 +27,17 @@ with "result=1" to avoid errors (NB this is just for TESTING).
 
 Be careful of spaces/tabs in python as these are part of the syntax! If you run
 into problems making changes, just copy a previous line EXACTLY, then modify the part
-after the initial spaces. Don't go inserting tabs, its just asking for trouble.
+after the initial spaces/tabs. ADDENDUM. I have now tabbified the script with tabstop=4
+(using Notepad++) which should make it much easier to edit.
+
+When using a stratum proxy server, follow the instructions at ...
+https://www.litecoinpool.org/help
+
+Specifically you must use the version from ...
+https://github.com/CryptoManiac/stratum-mining-proxy
+
+Start it as follows (on linux) ...
+./mining_proxy.py -nm -pa scrypt -o litecoinpool.org -p 3333
+
+Or in background with ...
+nohup ./mining_proxy.py -nm -pa scrypt -o litecoinpool.org -p 3333 >/tmp/stratum_ltc.log 2>&1&

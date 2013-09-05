@@ -4,24 +4,18 @@
 
 # Python wrapper for Xilinx Serial Miner
 
-# CONFIGURATION - CHANGE THIS TO YOUR ACCOUNT DETAILS ...
-# Optionally install a Stratum Proxy Server on localhost
-host = "mining-foreman.org"	# Getwork
+# Host/user configuration is NOT USED in ltctestmode.py ...
 # host = "localhost"	# Stratum Proxy alternative
-user = "username.1"		# Your worker goes here
-password = "password"	# Worker password, NOT your account password
-http_port = "10341"		# Getwork port.
+# user = "username.1"	# Your worker goes here
+# password = "password"	# Worker password, NOT your account password
 # http_port = "8332"	# Getwork port (stratum)
 
 # CONFIGURATION - CHANGE THIS (eg try COM1, COM2, COM3, COM4 etc)
 serial_port = "COM4"
 # serial_port = "/dev/ttyUSB0"	# raspberry pi
 
-# CONFIGURATION - how often to refresh work. 20 seconds is fine, but work is
-# not initially fetched until this timeout expires. Reduce it for debugging
-# and for stratum (2 works fine).
-askrate = 20	# Getwork
-# askrate = 2	# Stratum
+# CONFIGURATION - how often to refresh work - reduced for test
+askrate = 2
 
 ###############################################################################
 
@@ -89,13 +83,46 @@ class Writer(Thread):
 		self.diff = 2	# NB This is updated from target (default 2 is safer than 32 to avoid losing shares)
 
 		self.daemon = True
+		self.go = True
+		self.infile = open("../../scripts/test_data.txt","r")
+		self.nonce = 0
+		self.nonce_tested = 0
+		self.nonce_ok = 0
+		self.nonce_fail = 0
 
 	def run(self):
-		while True:
+		while self.go:
 			try:
-				work = bitcoin.getwork()
-				self.block = work['data']
-				self.target = work['target']
+				# work = bitcoin.getwork()
+				# self.block = work['data']
+				# self.target = work['target']
+				print "Tested", self.nonce_tested, " passed", self.nonce_ok, " fail", self.nonce_fail, " unmatched", self.nonce_tested - self.nonce_ok - self.nonce_fail
+				self.line = self.infile.readline()
+				if (len(self.line) != 257):
+					print "EOF on test data"	# Or its an error, but let's not be worrysome
+
+					# quit()		# Except it doesn't ...
+					self.go = False	# Terminating threads is a bit tricksy
+					break
+				self.nonce_tested = self.nonce_tested + 1
+				self.block = self.line.rstrip()
+				# Use a diff=32 target for test work
+				self.target = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff070000"
+				# print("block old " + self.block)
+				# We need to subtract a few from the nonces in order to match (why?)
+				nonce_bin = self.block.decode('hex')[79:75:-1]
+				self.nonce = int(nonce_bin.encode('hex'), 16)
+				# print "nonce old =", self.nonce
+				nonce_new = self.nonce - 50
+				if (nonce_new < 0):
+					nonce_new = 0
+				# print "nonce new =", nonce_new
+				nonce_hex = "{0:08x}".format(nonce_new)
+				# print "encoded = ", nonce_hex
+				nonce_hex_rev = nonce_hex[6:8]+nonce_hex[4:6]+nonce_hex[2:4]+nonce_hex[0:2]
+				# print "reversed = ", nonce_hex_rev
+				self.block = self.block[0:152]+nonce_hex_rev+self.block[160:]
+				# print("block new " + self.block)
 			except:
 				print("RPC getwork error")
 				# In this case, keep crunching with the old data. It will get 
@@ -106,7 +133,7 @@ class Writer(Thread):
 			sdiff = self.target.decode('hex')[31:27:-1]
 			intTarget = int(sdiff.encode('hex'), 16)
 			if (intTarget < 1):
-				print "WARNING zero target, defaulting to diff=2", intTarget
+				print "WARNING zero target", intTarget
 				print "target", self.target
 				print("sdiff", sdiff)	# NB Need brackets here else prints binary
 				self.target = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f0000"
@@ -115,8 +142,8 @@ class Writer(Thread):
 				if (self.diff != newdiff):
 					print "New target diff =", newdiff
 				self.diff = newdiff
-			
-			print("Sending data to FPGA")	# DEBUG
+
+			# print("Sending data to FPGA")	# DEBUG
 
 			# for litecoin send 80 bytes of the 128 byte data plus 4 bytes of 32 byte target
 			payload = self.target.decode('hex')[31:27:-1] + self.block.decode('hex')[79::-1]
@@ -127,7 +154,8 @@ class Writer(Thread):
 			# test_payload ="000000014eb4577c82473a069ca0e95703254da62e94d1902ab6f0eae8b1e718565775af20c9ba6ced48fc9915ef01c54da2200090801b2d2afc406264d491c7dfc7b0b251e91f141b44717e00310000ff070000"
 			# payload = test_payload.decode('hex')[::-1]
 
-			print("Payload " + payload.encode('hex_codec'))	# DEBUG
+			# This is probably best commented out unless debugging ...
+			print("Test " + payload.encode('hex_codec'))	# DEBUG
 			
 			ser.write(payload)
 			
@@ -149,14 +177,21 @@ class Submitter(Thread):
 
 		# print("Block found on " + ctime())
 		print("Share found on " + ctime() + " nonce " + self.nonce.encode('hex_codec'))
+		if (int(self.nonce.encode('hex_codec'),16) != writer.nonce):
+			print "... ERROR expected nonce", hex(writer.nonce)
+			writer.nonce_fail = writer.nonce_fail + 1
+		else:
+			print "... CORRECT"
+			writer.nonce_ok = writer.nonce_ok + 1
 		
 		hrnonce = self.nonce[::-1].encode('hex')
 
 		data = self.block[:152] + hrnonce + self.block[160:]
 
 		try:
-			result = bitcoin.getwork(data)
-			print("Upstream result: " + str(result))
+			# result = bitcoin.getwork(data)
+			result = False
+			# print("Upstream result: " + str(result))	# Pointless in test mode
 		except:
 			print("RPC send error")
 			# a sensible boolean for stats
@@ -183,15 +218,15 @@ class Display_stats(Thread):
 			else:
 				self.count[1] += 1
 				
-			print(stats(self.count, self.starttime))
+			# print(stats(self.count, self.starttime)) 	# Pointless in test mode
 				
 			results_queue.task_done()
 
 golden = Event()
 
-url = 'http://' + user + ':' + password + '@' + host + ':' + http_port
+# url = 'http://' + user + ':' + password + '@' + host + ':' + http_port
 
-bitcoin = ServiceProxy(url)
+# bitcoin = ServiceProxy(url)
 
 results_queue = Queue()
 
@@ -209,11 +244,10 @@ writer.start()
 disp.start()
 
 try:
-	while True:
+	while writer.go:
 		# Threads are generally hard to interrupt. So they are left
 		# running as daemons, and we do something simple here that can
 		# be easily terminated to bring down the entire script.
-		sleep(10000)
+		sleep(1)
 except KeyboardInterrupt:
 	print("Terminated")
-
