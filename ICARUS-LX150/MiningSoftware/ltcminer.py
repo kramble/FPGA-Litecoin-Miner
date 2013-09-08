@@ -85,8 +85,9 @@ class Writer(Thread):
 		# Keep something sensible available while waiting for the
 		# first getwork
 		self.block = "0" * 256
-		self.target = "0" * 56 + "ff070000"
-		self.diff = 2	# NB This is updated from target (default 2 is safer than 32 to avoid losing shares)
+		# self.target = "f" * 56 + "ff070000"		# diff=32
+		self.target = "f" * 56 + "ff7f0000"			# diff=2
+		self.diff = 2.0	# NB This is updated from target (default 2 is safer than 32 to avoid losing shares)
 
 		self.daemon = True
 
@@ -111,7 +112,7 @@ class Writer(Thread):
 				print("sdiff", sdiff)	# NB Need brackets here else prints binary
 				self.target = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f0000"
 			else:
-				newdiff = 65536 / intTarget
+				newdiff = 65536.0 / (intTarget+1)
 				if (self.diff != newdiff):
 					print "New target diff =", newdiff
 				self.diff = newdiff
