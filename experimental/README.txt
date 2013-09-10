@@ -40,3 +40,6 @@ hashvariant-C.v    As B, but pushes two hashes simultaneously through the pipeli
 LX150_SPLIT        Separates the pbkdf and salsa engines into separate modules linked by
                    a one bit serial bus to reduce routing congestion. This will form the
                    basis of ongoing work on further pipelining of the salsa.
+
+LX150_EIGHT-A      Fully pipelined salsa with 8 threads. Slow and somewhat buggy (see
+                   the README). Major rework is required, will use -B, -C suffixes.
