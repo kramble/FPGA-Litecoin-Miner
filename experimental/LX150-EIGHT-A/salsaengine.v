@@ -33,17 +33,15 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 	input reset;	// NB Needs a long reset (at least THREADS+4) to initialize correctly, this is done in pbkdfengine (15 cycles)
 	input din;
 	input shift;
-	input start;	// Start is not used in the current code (unless ONETHREAD is set)
+	input start;
 	output busy;
 	output reg result = 1'b0;
 	output dout;
 	
 	// Configure ADDRBITS to allocate RAM for core (automatically sets LOOKAHEAD_GAP)
 	// NB do not use ADDRBITS > 13 for THREADS=8 since this corresponds to more than a full scratchpad
-	// Also ADDRBITS == 13 does not currently work (gives range reversal errors in simulation for code branches
-	// that are inactive), it just needs a bit of tweaking to fix but as this adds even more complexity its not
-	// currently done (just comment out the (ADDRBITS < 13) code blocks instead to use this value)
 
+	// These settings are now overriden in ltcminer_icarus.v determined by LOCAL_MINERS ...
 	// parameter ADDRBITS = 13;	// 8MBit RAM allocated to core, full scratchpad (will not fit LX150)
 	parameter ADDRBITS = 12;	// 4MBit RAM allocated to core, half scratchpad
 	// parameter ADDRBITS = 11;	// 2MBit RAM allocated to core, quarter scratchpad
@@ -62,6 +60,9 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 	endfunction
 
 	parameter THREADS_BITS = clog2(THREADS);
+	
+	// Workaround for range-reversal error in inactive code when ADDRBITS=13
+	parameter ADDRBITSX = (ADDRBITS == 13) ? ADDRBITS-1 : ADDRBITS;
 
 	reg [THREADS_BITS:0]phase = 0;
 	reg [THREADS_BITS:0]phase_d = THREADS;
@@ -324,7 +325,7 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 		if (reset || start_count == START_INTERVAL)
 		begin
 			start_count <= 0;
-			if (~reset)
+			if (~reset && start)
 				start_flag <= 1'b1;
 		end
 		`endif
@@ -413,14 +414,14 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 							mixspecial <= 1'b1;			// Remains true throught R_MIX
 							// Need this to cover the case of the initial read being interpolated
 							// NB CODE IS REPLICATED IN R_MIX
-							if (ADDRBITS < 13)	// Sim gives error for (ADDRBITS==13) so comment out to use this value
+							if (ADDRBITS < 13)
 							begin
-								intcycles <= { {THREADS_BITS+12-ADDRBITS{1'b0}}, Xaddr[12-ADDRBITS:0] };	// Interpolated addresses
+								intcycles <= { {THREADS_BITS+12-ADDRBITSX{1'b0}}, Xaddr[12-ADDRBITSX:0] };	// Interpolated addresses
 
-								if ( Xaddr[9:13-ADDRBITS] ==  memtop[ADDRBITS-THREADS_BITS:1] )				// Highest address reserved
-									intcycles <= { {THREADS_BITS+11-ADDRBITS{1'b0}}, 1'b1, Xaddr[12-ADDRBITS:0] };
+								if ( Xaddr[9:13-ADDRBITSX] ==  memtop[ADDRBITSX-THREADS_BITS:1] )				// Highest address reserved
+									intcycles <= { {THREADS_BITS+11-ADDRBITSX{1'b0}}, 1'b1, Xaddr[12-ADDRBITSX:0] };
 
-								if ( (Xaddr[9:13-ADDRBITS] == memtop[ADDRBITS-THREADS_BITS:1]) || |Xaddr[12-ADDRBITS:0] )
+								if ( (Xaddr[9:13-ADDRBITSX] == memtop[ADDRBITSX-THREADS_BITS:1]) || |Xaddr[12-ADDRBITSX:0] )
 								begin
 									addrsourceSave <= 1'b1;			// Setup to save at mcount_in==0 (also does so entering R_IDLE
 									ram_wren <= 1'b1;				// after cycle==1023 but of no consequence)
@@ -431,8 +432,8 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 						end
 						else
 						begin
-							if (ADDRBITS < 13)	// Sim gives error for (ADDRBITS==13) so comment out to use this value
-								ram_wren <= ~|writeaddr_in[12-ADDRBITS:0];	// Only write non-interpolated addresses
+							if (ADDRBITS < 13)
+								ram_wren <= ~|writeaddr_in[12-ADDRBITSX:0];	// Only write non-interpolated addresses
 							else
 								ram_wren <= 1'b1;
 						end
@@ -465,25 +466,32 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 						mcount <= 0;
 						if (cycle_in==1023)
 						begin
-							XCtl <= XSload;		// Initial load else we overwrite input NB This is
-												// executed on the next cycle, regardless of phase
-							// Flag the SHA256 FSM to start final PBKDF2_SHA256_80_128_32
-							result <= 1'b1;
 							busy_flag <= 1'b0;	// Will hold at 0 for 9 clocks until set at R_START
-							mstate <= R_START;	// Restart immediately (ASSUMES data input is ready)
+							if (start)			// Check data input is ready
+							begin
+								XCtl <= XSload;		// Initial load else we overwrite input NB This is
+													// executed on the next cycle, regardless of phase
+								// Flag the SHA256 FSM to start final PBKDF2_SHA256_80_128_32
+								result <= 1'b1;
+								mstate <= R_START;	// Restart immediately
+							end
+							else
+							begin
+								mstate <= R_IDLE;	// Wait for start_flag
+							end
 						end
 						else
 						begin
 							XCtl <= XSram;				// Load from ram next cycle
 							// NB CODE IS REPLICATED IN R_WRITE
-							if (ADDRBITS < 13)	// Sim gives error for (ADDRBITS==13) so comment out to use this value
+							if (ADDRBITS < 13)
 							begin
-								intcycles <= { {THREADS_BITS+12-ADDRBITS{1'b0}}, Xaddr[12-ADDRBITS:0] };	// Interpolated addresses
+								intcycles <= { {THREADS_BITS+12-ADDRBITSX{1'b0}}, Xaddr[12-ADDRBITSX:0] };	// Interpolated addresses
 
-								if ( Xaddr[9:13-ADDRBITS] ==  memtop[ADDRBITS-THREADS_BITS:1] )				// Highest address reserved
-									intcycles <= { {THREADS_BITS+11-ADDRBITS{1'b0}}, 1'b1, Xaddr[12-ADDRBITS:0] };
+								if ( Xaddr[9:13-ADDRBITSX] ==  memtop[ADDRBITSX-THREADS_BITS:1] )				// Highest address reserved
+									intcycles <= { {THREADS_BITS+11-ADDRBITSX{1'b0}}, 1'b1, Xaddr[12-ADDRBITSX:0] };
 
-								if ( (Xaddr[9:13-ADDRBITS] == memtop[ADDRBITS-THREADS_BITS:1]) || |Xaddr[12-ADDRBITS:0] )
+								if ( (Xaddr[9:13-ADDRBITSX] == memtop[ADDRBITSX-THREADS_BITS:1]) || |Xaddr[12-ADDRBITSX:0] )
 								begin
 									addrsourceSave <= 1'b1;			// Setup to save at mcount_in==0 (also does so entering R_IDLE
 									ram_wren <= 1'b1;				// after cycle==1023 but of no consequence)
