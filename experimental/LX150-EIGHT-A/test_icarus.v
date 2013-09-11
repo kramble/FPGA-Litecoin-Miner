@@ -2,6 +2,7 @@
 
 `timescale 1ns/1ps
 
+`ifdef SIM					// Avoids wrong top selected if included in ISE/PlanAhead sources
 module test_ltcminer ();
 
 	reg clk = 1'b0;
@@ -79,3 +80,4 @@ module test_ltcminer ();
 	end
 
 endmodule
+`endif
