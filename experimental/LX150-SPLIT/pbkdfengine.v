@@ -194,6 +194,7 @@ module pbkdfengine
 		begin
 			state <= S_IDLE;
 			start_output <= 1'b0;
+			salsa_shift <= 1'b0;
 		end
 		else
 		begin
