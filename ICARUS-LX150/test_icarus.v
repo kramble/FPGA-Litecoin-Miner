@@ -2,6 +2,7 @@
 
 `timescale 1ns/1ps
 
+`ifdef SIM					// Avoids wrong top selected if included in ISE/PlanAhead sources
 module test_ltcminer ();
 
 	reg clk = 1'b0;
@@ -63,6 +64,7 @@ module test_ltcminer ();
 
 	// TUNE this according to comm_clk_frequency so we send a single getwork (else it gets overwritten with 0's)
 	parameter stop_cycle = 7020;		// For comm_clk_frequency=1_000_000
+	// parameter stop_cycle = 0;			// Use this to DISABLE sending data
 	always @ (posedge clk)
 	begin
 		serial_send <= 0;				// Default
@@ -78,3 +80,4 @@ module test_ltcminer ();
 	end
 
 endmodule
+`endif
