@@ -1,10 +1,5 @@
 Experimental hashing cores.
 
-These currently target the DE0-Nano board (Cyclone IV 22kLE) as that is what I have, but
-I may include some tests on my Xilinx LX9 homebrew board (not that I expect to be able to
-fit a sensible scrypt hashing core on this tiny device, though a severly cut down version
-might be possible).
-
 I have several goals here ...
 
 1. Reduce LE count to enable more cores to be fitted. This is easiest for registers which
@@ -43,3 +38,5 @@ LX150_SPLIT        Separates the pbkdf and salsa engines into separate modules l
 
 LX150_EIGHT-A      Fully pipelined salsa with 8 threads. Slow and somewhat buggy (see
                    the README). Major rework is required, will use -B, -C suffixes.
+ 
+LX150_EIGHT-B      Separate clock domains for pbkbd and salsa, dynamic clock speed (yay)!
