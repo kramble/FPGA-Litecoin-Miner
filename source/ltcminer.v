@@ -41,7 +41,7 @@
 
 	input osc_clk;
 `ifndef NOLEDS
-	output [7:0]LEDS_out;			// Optional progress indicator
+	output reg [7:0]LEDS_out;			// Optional progress indicator
 `endif
 
 	wire hash_clk;
@@ -121,7 +121,7 @@
 		if (port_counter == LOCAL_MINERS-1)
 			port_counter <= 0;
 		else
-			port_counter <= port_counter + 1;
+			port_counter <= port_counter + 1'd1;
 		
 		// kramble - the optimiser removes all but the low 32 bits of nonces_shifted since
 		// the following code implements a multiplexor on nonces input, NOT an actual shifter.
@@ -168,7 +168,14 @@
 	
 
 `ifndef NOLEDS
-	assign LEDS_out = nonce_out[15:8];		// Optional LED progress indicator
+	// Optional LED progress indicator
+	always @(posedge hash_clk) begin
+	`ifdef INVERTLEDS
+		LEDS_out <= ~nonce_out[15:8];		// Inverted for BeMicro
+	`else
+		LEDS_out <= nonce_out[15:8];
+	`endif
+	end
 `endif
 
 endmodule
