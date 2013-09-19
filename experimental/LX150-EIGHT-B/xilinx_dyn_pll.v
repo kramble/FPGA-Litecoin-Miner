@@ -31,6 +31,7 @@ module dyn_pll # (parameter SPEED_MHZ = 25 )
 	dcm_progdata,
 	dcm_progen,
 	dcm_reset,
+	dcm_progdone,
 	dcm_locked,
 	dcm_status);
 	
@@ -46,6 +47,7 @@ module dyn_pll # (parameter SPEED_MHZ = 25 )
 	input dcm_progdata;
 	input dcm_progen;
 	input dcm_reset;
+	output dcm_progdone;
 	output dcm_locked;
 	output [2:1] dcm_status;
 	
@@ -118,6 +120,7 @@ module dyn_pll # (parameter SPEED_MHZ = 25 )
 		.PROGCLK(dcm_progclk_buf),
 		.PROGDATA(dcm_progdata),
 		.PROGEN(dcm_progen),
+		.PROGDONE(dcm_progdone),
 		.LOCKED(dcm_locked),
 		.STATUS(dcm_status),
 		.RST(dcm_reset)

@@ -6,7 +6,7 @@
 
 `include "../../source/sha-256-functions.v"
 `include "../../source/sha256_transform.v"
-`include "../../ICARUS-LX150/xilinx_pll.v"
+// `include "../../ICARUS-LX150/xilinx_pll.v"	// Only needed if not USE_DYN_PLL
 `include "../../ICARUS-LX150/uart_receiver.v"
 `include "../../ICARUS-LX150/uart_transmitter.v"
 `include "../../ICARUS-LX150/serial.v"
@@ -40,7 +40,7 @@ module ltcminer_icarus (osc_clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip,
 `ifdef SPEED_LIMIT
 	parameter SPEED_LIMIT = `SPEED_LIMIT;			// Fastest speed accepted by dyn_pll config
 `else
-	parameter SPEED_LIMIT = 100;					// Deliberately conservative, increase at own risk
+	parameter SPEED_LIMIT = 150;					// Deliberately conservative, increase at own risk
 `endif
 
 `ifdef SERIAL_CLK
@@ -84,7 +84,7 @@ module ltcminer_icarus (osc_clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip,
 	wire hash_clk, uart_clk, pbkdf_clk;
 
 `ifdef USE_DYN_PLL
-	wire first_dcm_locked, dcm_progclk, dcm_progdata, dcm_progen, dcm_reset, dcm_locked;
+	wire first_dcm_locked, dcm_progclk, dcm_progdata, dcm_progen, dcm_reset, dcm_progdone, dcm_locked;
 	wire [2:1] dcm_status;
 `endif
 
@@ -100,6 +100,7 @@ module ltcminer_icarus (osc_clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip,
 			dcm_progdata,
 			dcm_progen,
 			dcm_reset,
+			dcm_progdone,
 			dcm_locked,
 			dcm_status);
 	`else
@@ -284,8 +285,10 @@ module ltcminer_icarus (osc_clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip,
 	output [3:0] led;
 	assign led[1] = ~RxD;
 	// assign led[2] = ~TxD;
-	assign led[3] = ~ (TMP_SCL | TMP_SDA | TMP_ALERT);	// IDLE LED - held low (the TMP pins are PULLUP, this is a fudge to
-														// avoid warning about unused inputs)
+	// assign led[3] = ~ (TMP_SCL | TMP_SDA | TMP_ALERT);	// IDLE LED - held low (the TMP pins are PULLUP, this is a fudge to
+															// avoid warning about unused inputs)
+	
+	assign led[3] = ~first_dcm_locked | ~dcm_locked | dcm_status[2] | ~(TMP_SCL | TMP_SDA | TMP_ALERT);	// IDLE LED now dcm status
 
 `define FLASHCLOCK		// Gives some feedback as the the actual clock speed
 
