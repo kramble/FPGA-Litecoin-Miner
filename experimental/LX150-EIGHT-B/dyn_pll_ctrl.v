@@ -1,4 +1,4 @@
-module dyn_pll_ctrl # (parameter SPEED_MHZ = 25, parameter SPEED_LIMIT = 100, parameter OSC_MHZ = 100)
+module dyn_pll_ctrl # (parameter SPEED_MHZ = 25, parameter SPEED_LIMIT = 100, parameter SPEED_MIN = 25, parameter OSC_MHZ = 100)
 	(clk,
 	clk_valid,
 	speed_in,
@@ -21,10 +21,9 @@ module dyn_pll_ctrl # (parameter SPEED_MHZ = 25, parameter SPEED_LIMIT = 100, pa
 	input locked;
 	input [2:1] status;
 
-	// TODO watchdog on dcm_status ... reset if invalid for too long
-	
 	// NB spec says to use (dval-1) and (mval-1), but I don't think we need to be that accurate
-	//    and this saves a pair of adders. Feel free to amend it.
+	//    and this saves an adder. Feel free to amend it.
+	reg [23:0] watchdog = 0;
 	reg [7:0] state = 0;
 	reg [7:0] dval = OSC_MHZ;	// Osc clock speed (hence mval scales in MHz)
 	reg [7:0] mval = SPEED_MHZ;
@@ -34,6 +33,19 @@ module dyn_pll_ctrl # (parameter SPEED_MHZ = 25, parameter SPEED_LIMIT = 100, pa
 	begin
 		progclk <= ~progclk;
 		start_d1 <= start;
+		reset <= 1'b0;
+		
+		// Watchdog is just using locked, perhaps also need | ~status[2]
+		if (locked)
+			watchdog <= 0;
+		else
+			watchdog <= watchdog + 1'b1;
+		
+		if (watchdog[23])		// Approx 670mS at 12.5MHz - NB spec is 5ms to lock at >50MHz CLKIN (50ms at <50MHz CLKIN)
+		begin					// but allow longer just in case
+			watchdog <= 0;
+			reset <= 1'b1;		// One cycle at 12.5MHz should suffice (requirment is 3 CLKIN at 100MHz)
+		end
 		
 		if (~clk_valid)			// Try not to run while clk is unstable
 		begin
@@ -46,13 +58,13 @@ module dyn_pll_ctrl # (parameter SPEED_MHZ = 25, parameter SPEED_LIMIT = 100, pa
 		
 			// The documentation is unclear as to whether the DCM loads data on positive or negative edge. The timing
 			// diagram unhelpfully shows data changing on the positive edge, which could mean either its sampled on
-			// negative, or it was clocked on positive! However the following says NEGATIVE ...
+			// negative, or it was clocked on positive! However the following (WRONGLY) says NEGATIVE ...
 			// http://forums.xilinx.com/t5/Spartan-Family-FPGAs/Spartan6-DCM-CLKGEN-does-PROGCLK-have-a-maximum-period-minimum/td-p/175642
-			// BUT this can lock up the DCM, positive clock seems more reliable (but it can still lock up for low values of M).
-			// TODO sort this issue out properly and implement a watchdog.
+			// BUT this can lock up the DCM, positive clock seems more reliable (but it can still lock up for low values of M, eg 2).
+			// Added SPEED_MIN to prevent this (and positive clock is correct, after looking at other implementations eg ztex/theseven)
 		
-			if ((start || start_d1) && state==0 && speed_in != 0 && speed_in < SPEED_LIMIT && progclk==1)	// positive clock
-			// if ((start || start_d1) && state==0 && speed_in != 0 && speed_in < SPEED_LIMIT && progclk==0)	// negative clock
+			if ((start || start_d1) && state==0 && speed_in >= SPEED_MIN && speed_in <= SPEED_LIMIT && progclk==1)	// positive clock
+			// if ((start || start_d1) && state==0 && speed_in >= SPEED_MIN && speed_in <= SPEED_LIMIT && progclk==0)	// negative clock
 			begin
 				progen <= 0;
 				progdata <= 0;
