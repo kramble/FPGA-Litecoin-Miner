@@ -1,11 +1,15 @@
 Bitstreams have been uploaded to dropbox ...
 
-experimental/LX150-SPLIT
-------------------------
+experimental/LX150-SPLIT 05-Sep-2013 12-14khash/sec
+---------------------------------------------------
 
 https://www.dropbox.com/s/ox5tvpc0g4htqpj/LX150-SPLIT-rel-10-4fullcore-25MHz.7z
 
 https://www.dropbox.com/s/cqioj30zahszh43/LX150-SPLIT-rel-10-4fullcore-30MHz.7z
+
+ICARUS-LX150 26-Sep-2013 33kHash/sec at 50MHz
+---------------------------------------------
+https://www.dropbox.com/s/sietguvi35c7gl1/rel-13-icarus-lx150-25Mhz-max-51Mhz.bit
 
 You'll need 7zip to uncompress them and IMPACT from the xilinx ISE to program. Download
 and install the full version (not Webpack). No licence is needed to run IMPACT, at
