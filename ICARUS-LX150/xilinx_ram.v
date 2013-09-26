@@ -1,13 +1,15 @@
 // xilinx_ram.v - inferring the ram seems to work fine
 
 module ram # ( parameter ADDRBITS=10 ) (
-	address,
+	raddr,
+	waddr,
 	clock,
 	data,
 	wren,
 	q);
 
-	input	[ADDRBITS-1:0]  address;
+	input	[ADDRBITS-1:0]  raddr;
+	input	[ADDRBITS-1:0]  waddr;
 	input	  clock;
 	input	[255:0]  data;
 	input	  wren;
@@ -19,9 +21,9 @@ module ram # ( parameter ADDRBITS=10 ) (
 	
 	always @ (posedge clock)
 	begin
-		raddr_reg <= address;
+		raddr_reg <= raddr;
 		if (wren)
-			store[address] <= data;
+			store[waddr] <= data;
 	end
 	
 	assign q = store[raddr_reg];

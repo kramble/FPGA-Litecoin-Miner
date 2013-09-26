@@ -21,9 +21,15 @@ but this must match the value hard-coded into ltcminer_icarus.v
 
 There is a test getwork that you can enable, just uncomment the two lines for
 test_payload. This still requires a working pool, which will REJECT the share, but
-its a useful quick test that everything is working. You may want to comment
-out the share submission at line 140 "result = bitcoin.getwork(data)". Replace it
-with "result=1" to avoid errors (NB this is just for TESTING).
+its a useful quick test that everything is working. This is now obsolete as I have
+provided ltcminer-testmode.py which runs 10 test hashes (a full 910 test hash set is
+also available in ../../scripts/test_data_cut.txt).
+
+The scripts take a single (optional) parameter, the clock speed (in MHz) for use with
+the dynamic clock PLL. The value is checked for validity in the FPGA, so not all values
+will work (see SPEED_LIMIT and SPEED_MIN parameters in ltcminer_icarus.v). Use the
+FLASHCLOCK feature (blinks the TxD led in time to the clock) to verify the clock speed
+has been accepted.
 
 Be careful of spaces/tabs in python as these are part of the syntax! If you run
 into problems making changes, just copy a previous line EXACTLY, then modify the part
