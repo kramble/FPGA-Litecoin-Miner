@@ -1,0 +1,38 @@
+# Based on https://github.com/ngzhang/Icarus/blob/master/FPGA_project/Src/fpgaminer_top.ucf
+
+NET "hash_clk" TNM_NET = "hash_clk";
+NET "pbkdf_clk" TNM_NET = "pbkdf_clk";
+NET "uart_clk" TNM_NET = "uart_clk";
+
+# 10MHz hash_clk (it may route better specifying a slightly slower clock)
+TIMESPEC TS_hash_clk = PERIOD "hash_clk" 10 MHZ HIGH 50 % INPUT_JITTER 7 ps;
+
+# 50MHz pbkdf_clk
+TIMESPEC TS_pbkdf_clk = PERIOD "pbkdf_clk" 50 MHZ HIGH 50 % INPUT_JITTER 7 ps;
+
+# 12.5MHz uart_clk
+TIMESPEC TS_uart_clk = PERIOD "uart_clk" 12.5 MHZ HIGH 50 % INPUT_JITTER 7 ps;
+
+NET "osc_clk" LOC = J1 | IOSTANDARD = LVCMOS33;
+
+# serial port receive & transmit
+NET "RxD" LOC = D1 | IOSTANDARD = LVCMOS33;
+NET "TxD" LOC = B1 | IOSTANDARD = LVCMOS33;
+
+# TTL level serial port: ja3 = rxd, ja2 = txd
+NET "extminer_txd[0]" LOC = D22 | IOSTANDARD = LVCMOS33;
+NET "extminer_rxd[0]" LOC = B22 | IOSTANDARD = LVCMOS33;
+
+NET "led[0]" LOC = A18 | IOSTANDARD = LVCMOS33;
+NET "led[1]" LOC = B18 | IOSTANDARD = LVCMOS33;
+NET "led[2]" LOC = A17 | IOSTANDARD = LVCMOS33;
+NET "led[3]" LOC = A16 | IOSTANDARD = LVCMOS33;
+
+NET "dip[0]" LOC = A4 | IOSTANDARD = LVCMOS33;
+NET "dip[1]" LOC = D6 | IOSTANDARD = LVCMOS33;
+NET "dip[2]" LOC = C6 | IOSTANDARD = LVCMOS33;
+NET "dip[3]" LOC = C8 | IOSTANDARD = LVCMOS33;
+
+NET "TMP_SCL" LOC = C1 | IOSTANDARD = LVCMOS33 | PULLUP;
+NET "TMP_SDA" LOC = E1 | IOSTANDARD = LVCMOS33 | PULLUP;
+NET "TMP_ALERT" LOC = C3 | IOSTANDARD = LVCMOS33 | PULLUP;
