@@ -53,7 +53,12 @@ module test_ltcminer ();
 
 	// Send serial data - 84 bytes, matches on nonce 318f (included in data)
 	// NB starting nonce is 381e NOT 381f (see note above)
-	reg [671:0] data = 672'h000007ff0000318e7e71441b141fe951b2b0c7dfc791d4646240fc2a2d1b80900020a24dc501ef1599fc48ed6cbac920af75575618e7b1e8eaf0b62a90d1942ea64d250357e9a09c063a47827c57b44e01000000;
+	
+	// NORMAL...
+	// reg [671:0] data = 672'h000007ff0000318e7e71441b141fe951b2b0c7dfc791d4646240fc2a2d1b80900020a24dc501ef1599fc48ed6cbac920af75575618e7b1e8eaf0b62a90d1942ea64d250357e9a09c063a47827c57b44e01000000;
+
+	// DYNPLL...
+	reg [671:0] data = 672'h55aa07ff0000318e7e71441b141fe951b2b0c7dfc791d4646240fc2a2d1b80900020a24dc501ef1599fc48ed6cbac920af75575618e7b1e8eaf0b62a90d1942ea64d250357e9a09c063a47827c57b44e01000000;
 	
 	reg			serial_send = 0;
 	wire		serial_busy;
@@ -63,8 +68,8 @@ module test_ltcminer ();
 	serial_transmit #(.comm_clk_frequency(comm_clk_frequency), .baud_rate(baud_rate)) sertx (.clk(clk), .TxD(RxD), .send(serial_send), .busy(serial_busy), .word(data_32));
 
 	// TUNE this according to comm_clk_frequency so we send a single getwork (else it gets overwritten with 0's)
-	parameter stop_cycle = 7020;		// For comm_clk_frequency=1_000_000
-	// parameter stop_cycle = 0;			// Use this to DISABLE sending data
+	// parameter stop_cycle = 7020;		// For comm_clk_frequency=1_000_000
+	parameter stop_cycle = 0;			// Use this to DISABLE sending data
 	always @ (posedge clk)
 	begin
 		serial_send <= 0;				// Default

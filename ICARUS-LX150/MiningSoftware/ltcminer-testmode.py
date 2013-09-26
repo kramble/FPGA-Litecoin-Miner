@@ -4,17 +4,13 @@
 
 # Python wrapper for Xilinx Serial Miner
 
-# Host/user configuration is NOT USED in ltctestmode.py ...
-# host = "localhost"	# Stratum Proxy alternative
-# user = "username.1"	# Your worker goes here
-# password = "password"	# Worker password, NOT your account password
-# http_port = "8332"	# Getwork port (stratum)
+# Host/user configuration is NOT USED in ltcminer-testmode.py
 
 # CONFIGURATION - CHANGE THIS (eg try COM1, COM2, COM3, COM4 etc)
 serial_port = "COM4"
 # serial_port = "/dev/ttyUSB0"	# raspberry pi
 
-# CONFIGURATION - how often to refresh work - reduced for test
+# CONFIGURATION - how often to refresh work - reduced for testing
 askrate = 2
 
 ###############################################################################
@@ -24,12 +20,12 @@ from time import ctime, sleep, time
 from serial import Serial
 from threading import Thread, Event
 from Queue import Queue
+import sys
+
+dynclock = 0
+dynclock_hex = "0000"
 
 def stats(count, starttime):
-	# BTC 2**32 hashes per share (difficulty 1)
-	# mhshare = 4294.967296
-	# LTC 2**32 / 2048 hashes per share (difficulty 32)
-	# khshare = 2097.152	# CHECK THIS !!
 	khshare = 65.536 * writer.diff
 
 	s = sum(count)
@@ -73,17 +69,19 @@ class Reader(Thread):
 
 
 class Writer(Thread):
-	def __init__(self):
+	def __init__(self,dynclock_hex):
 		Thread.__init__(self)
 
 		# Keep something sensible available while waiting for the
 		# first getwork
 		self.block = "0" * 256
-		self.target = "0" * 56 + "ff070000"
-		self.diff = 2	# NB This is updated from target (default 2 is safer than 32 to avoid losing shares)
+		self.target = "f" * 56 + "ff070000"		# diff=32 for testmode
+		self.diff = 32	# testmode
+		self.dynclock_hex = dynclock_hex
 
 		self.daemon = True
 		self.go = True
+		# Alternatively use test_data_cut.txt for full 910 hash test suite
 		self.infile = open("../../scripts/test_data.txt","r")
 		self.nonce = 0
 		self.nonce_tested = 0
@@ -106,8 +104,12 @@ class Writer(Thread):
 					break
 				self.nonce_tested = self.nonce_tested + 1
 				self.block = self.line.rstrip()
-				# Use a diff=32 target for test work
-				self.target = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff070000"
+				
+				# Hard-code a diff=32 target for test work
+				# Replace MSB 16 bits of target with clock (NB its reversed)
+				self.target = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff07" + self.dynclock_hex
+				self.dynclock_hex = "0000"	# Once only
+				
 				# print("block old " + self.block)
 				# We need to subtract a few from the nonces in order to match (why?)
 				nonce_bin = self.block.decode('hex')[79:75:-1]
@@ -138,7 +140,7 @@ class Writer(Thread):
 				print("sdiff", sdiff)	# NB Need brackets here else prints binary
 				self.target = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f0000"
 			else:
-				newdiff = 65536 / intTarget
+				newdiff = 65536.0 / (intTarget+1)
 				if (self.diff != newdiff):
 					print "New target diff =", newdiff
 				self.diff = newdiff
@@ -222,6 +224,40 @@ class Display_stats(Thread):
 				
 			results_queue.task_done()
 
+# ======= main =======
+
+# Process command line
+
+if (len(sys.argv) > 2):
+	print "ERROR too many command line arguments"
+	print "usage:", sys.argv[0], "clockfreq"
+	quit()
+
+if (len(sys.argv) == 1):
+	print "WARNING no clockfreq supplied, not setting freq"
+else:
+	# TODO ought to check the value is a valid integer
+	try:
+		dynclock = int(sys.argv[1])
+	except:
+		print "ERROR parsing clock frequency on command line, needs to be an integer"
+		print "usage:", sys.argv[0], "clockfreq"
+		quit()
+	if (dynclock==0):
+		print "ERROR parsing clock frequency on command line, cannot be zero"
+		print "usage:", sys.argv[0], "clockfreq"
+		quit()
+	if (dynclock>254):	# Its 254 since onescomplement(255) is zero, which is not allowed
+		print "ERROR parsing clock frequency on command line, max 254"
+		print "usage:", sys.argv[0], "clockfreq"
+		quit()
+	if (dynclock<25):
+		print "ERROR use at least 25 for clock (the DCM can lock up for low values)"
+		print "usage:", sys.argv[0], "clockfreq"
+		quit()
+	dynclock_hex = "{0:04x}".format((255-dynclock)*256+dynclock)	# both value and ones-complement
+	print "INFO will set clock to", dynclock, "MHz hex", dynclock_hex
+
 golden = Event()
 
 # url = 'http://' + user + ':' + password + '@' + host + ':' + http_port
@@ -236,7 +272,7 @@ results_queue = Queue()
 ser = Serial(serial_port, 115200, timeout=askrate)
 
 reader = Reader()
-writer = Writer()
+writer = Writer(dynclock_hex)
 disp = Display_stats()
 
 reader.start()

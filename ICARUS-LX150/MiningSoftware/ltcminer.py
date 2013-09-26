@@ -5,13 +5,19 @@
 # Python wrapper for Xilinx Serial Miner
 
 # CONFIGURATION - CHANGE THIS TO YOUR ACCOUNT DETAILS ...
-# Optionally install a Stratum Proxy Server on localhost
-host = "mining-foreman.org"	# Getwork
-# host = "localhost"	# Stratum Proxy alternative
+# Optionally install a Stratum Proxy Server
+
+host = "mining-foreman.org"			# Getwork pools
+# host = "http://litecoinpool.org"
+# host = "localhost"	# Stratum Proxy on localhost
+# host = "tvpi.lan"		# Stratum Proxy (raspberry pi)
+
+http_port = "10341"		# Getwork port (mining-foreman)
+# http_port = "9332"	# Getwork port (litcoinpool)
+# http_port = "8332"	# Getwork port (stratum)
+
 user = "username.1"		# Your worker goes here
 password = "password"	# Worker password, NOT your account password
-http_port = "10341"		# Getwork port.
-# http_port = "8332"	# Getwork port (stratum)
 
 # CONFIGURATION - CHANGE THIS (eg try COM1, COM2, COM3, COM4 etc)
 serial_port = "COM4"
@@ -30,12 +36,12 @@ from time import ctime, sleep, time
 from serial import Serial
 from threading import Thread, Event
 from Queue import Queue
+import sys
+
+dynclock = 0
+dynclock_hex = "0000"
 
 def stats(count, starttime):
-	# BTC 2**32 hashes per share (difficulty 1)
-	# mhshare = 4294.967296
-	# LTC 2**32 / 2048 hashes per share (difficulty 32)
-	# khshare = 2097.152	# CHECK THIS !!
 	khshare = 65.536 * writer.diff
 
 	s = sum(count)
@@ -79,7 +85,7 @@ class Reader(Thread):
 
 
 class Writer(Thread):
-	def __init__(self):
+	def __init__(self,dynclock_hex):
 		Thread.__init__(self)
 
 		# Keep something sensible available while waiting for the
@@ -88,6 +94,7 @@ class Writer(Thread):
 		# self.target = "f" * 56 + "ff070000"		# diff=32
 		self.target = "f" * 56 + "ff7f0000"			# diff=2
 		self.diff = 2.0	# NB This is updated from target (default 2 is safer than 32 to avoid losing shares)
+		self.dynclock_hex = dynclock_hex
 
 		self.daemon = True
 
@@ -116,6 +123,10 @@ class Writer(Thread):
 				if (self.diff != newdiff):
 					print "New target diff =", newdiff
 				self.diff = newdiff
+
+			# Replace MSB 16 bits of target with clock (NB its reversed)
+			self.target = self.target[0:60] + self.dynclock_hex
+			self.dynclock_hex = "0000"	# Once only
 			
 			print("Sending data to FPGA")	# DEBUG
 
@@ -188,6 +199,40 @@ class Display_stats(Thread):
 				
 			results_queue.task_done()
 
+# ======= main =======
+
+# Process command line
+
+if (len(sys.argv) > 2):
+	print "ERROR too many command line arguments"
+	print "usage:", sys.argv[0], "clockfreq"
+	quit()
+
+if (len(sys.argv) == 1):
+	print "WARNING no clockfreq supplied, not setting freq"
+else:
+	# TODO ought to check the value is a valid integer
+	try:
+		dynclock = int(sys.argv[1])
+	except:
+		print "ERROR parsing clock frequency on command line, needs to be an integer"
+		print "usage:", sys.argv[0], "clockfreq"
+		quit()
+	if (dynclock==0):
+		print "ERROR parsing clock frequency on command line, cannot be zero"
+		print "usage:", sys.argv[0], "clockfreq"
+		quit()
+	if (dynclock>254):	# Its 254 since onescomplement(255) is zero, which is not allowed
+		print "ERROR parsing clock frequency on command line, max 254"
+		print "usage:", sys.argv[0], "clockfreq"
+		quit()
+	if (dynclock<25):
+		print "ERROR use at least 25 for clock (the DCM can lock up for low values)"
+		print "usage:", sys.argv[0], "clockfreq"
+		quit()
+	dynclock_hex = "{0:04x}".format((255-dynclock)*256+dynclock)	# both value and ones-complement
+	print "INFO will set clock to", dynclock, "MHz hex", dynclock_hex
+
 golden = Event()
 
 url = 'http://' + user + ':' + password + '@' + host + ':' + http_port
@@ -202,7 +247,7 @@ results_queue = Queue()
 ser = Serial(serial_port, 115200, timeout=askrate)
 
 reader = Reader()
-writer = Writer()
+writer = Writer(dynclock_hex)
 disp = Display_stats()
 
 reader.start()
