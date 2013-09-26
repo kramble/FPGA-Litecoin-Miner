@@ -53,3 +53,11 @@ LX150-SLOWSIXTEEN-A Added a pipeline stage between column and row operations. Si
                    threads, and this time a second core does fit. Clocks at 50Mhz (the
                    default is 25MHz, so increase it at runtime via the mining script)
                    giving aroung 16khash/sec per LX150 (33khash/sec total for Lancelot).
+
+The later versions (LX150-EIGHT onwards) are built in PlanAhead version 14.4 (32 bits)
+using the following modified synthesis settings (strategy defined in Tools/Options) ...
+
+register balancing = yes
+register duplication = yes (already in default)
+resource sharing = no
+equivalent register removal = no
