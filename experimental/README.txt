@@ -61,3 +61,7 @@ register balancing = yes
 register duplication = yes (already in default)
 resource sharing = no
 equivalent register removal = no
+
+The constraint on hash_clk is VERY lax at 10MHz to facilitate a quick build. You will
+need to increase this for a better FMAX, in conjunction with tuning the implementation
+strategy (for example try setting different values for the tables option -t).

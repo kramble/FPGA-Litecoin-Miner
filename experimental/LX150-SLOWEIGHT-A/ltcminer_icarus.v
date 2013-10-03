@@ -40,7 +40,7 @@ module ltcminer_icarus (osc_clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip,
 `ifdef SPEED_LIMIT
 	parameter SPEED_LIMIT = `SPEED_LIMIT;			// Fastest speed accepted by dyn_pll config
 `else
-	parameter SPEED_LIMIT = 50;						// Deliberately conservative, increase at own risk
+	parameter SPEED_LIMIT = 100;					// Deliberately conservative, increase at own risk
 `endif
 
 `ifdef SPEED_MIN

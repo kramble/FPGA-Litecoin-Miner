@@ -31,7 +31,7 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 
 
 	input hash_clk;
-	input reset;	// NB pbkdf_clk domain (need a long reset (at least THREADS+4) to initialize correctly, this is done in pbkdfengine (15 cycles)
+	input reset;	// NB pbkdf_clk domain (need a long reset (at least THREADS+4) to initialize correctly, this is done in pbkdfengine
 	input shift;
 	input start;	// NB pbkdf_clk domain
 	output busy;
@@ -42,15 +42,18 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 	output [SBITS-1:0] dout;
 
 	// Configure ADDRBITS to allocate RAM for core (automatically sets LOOKAHEAD_GAP)
-	// NB do not use ADDRBITS > 13 for THREADS=8 since this corresponds to more than a full scratchpad
+	// NB do not use ADDRBITS > 13 for THREADS=8 or ADDRBITS > 14 for THREADS=16 as this is more than
+	// a full scratchpad and the calculation for INT_BITS will be invalid.
 
 	// These settings are now overriden in ltcminer_icarus.v determined by LOCAL_MINERS ...
-	// parameter ADDRBITS = 13;	// 8MBit RAM allocated to core, full scratchpad (will not fit LX150)
-	parameter ADDRBITS = 12;	// 4MBit RAM allocated to core, half scratchpad
-	// parameter ADDRBITS = 11;	// 2MBit RAM allocated to core, quarter scratchpad
-	// parameter ADDRBITS = 10;	// 1MBit RAM allocated to core, eighth scratchpad
+	// These values are for THREADS=8, scratchpad sizes are halved for THREADS=16
+	// parameter ADDRBITS = 14;	// 16MBit RAM allocated to core, full scratchpad for THREADS=16(will not fit LX150)
+	// parameter ADDRBITS = 13;	//  8MBit RAM allocated to core, full scratchpad (will not fit LX150)
+	parameter ADDRBITS = 12;	//  4MBit RAM allocated to core, half scratchpad
+	// parameter ADDRBITS = 11;	//  2MBit RAM allocated to core, quarter scratchpad
+	// parameter ADDRBITS = 10;	//  1MBit RAM allocated to core, eighth scratchpad
 
-	// Do not change THREADS - this must match the salsa pipeline (code is untested for other values)
+	// Do not change THREADS - this must match the salsa pipeline (8 or 16 cycle latency for 8 or 16 threads)
 	parameter THREADS = 8;		// NB Phase has THREADS+1 cycles
 
 	function integer clog2;		// Courtesy of razorfishsl, replaces $clog2()
@@ -64,11 +67,8 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 
 	parameter THREADS_BITS = clog2(THREADS);
 	
-	// Workaround for range-reversal error in inactive code when ADDRBITS=13
-	parameter ADDRBITSX = (ADDRBITS == 13) ? ADDRBITS-1 : ADDRBITS;
-
 	reg [THREADS_BITS:0]phase = 0;
-	reg [THREADS_BITS:0]phase_d = THREADS+1;
+	reg [THREADS_BITS:0]phase_d = THREADS;
 	reg reset_d=0, fsmreset=0, start_d=0, fsmstart=0;
 
 	always @ (posedge hash_clk)		// Phase control and sync
@@ -83,19 +83,25 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 
 	// Salsa Mix FSM (handles both loading of the scratchpad ROM and the subsequent processing)
 
-	parameter XSnull = 0, XSload = 1, XSmix = 2, XSram = 4;			// One-hot since these map directly to mux contrls
-	reg [2:0] XCtl = XSnull;
+	parameter XSmix = 0, XSload = 1, XSram = 2;	// One-hot since these map directly to mux contrls
 
-	parameter R_IDLE=0, R_START=1, R_WRITE=2, R_MIX=3, R_INT=4, R_WAIT=5;
+	reg [1:0] XCtl = XSmix;
+
+	parameter R_IDLE=0, R_START=1, R_LOAD=2, R_WRITE=3, R_MIX=4, R_INT=5, R_WAIT=6;
 	reg [2:0] mstate = R_IDLE;
 	reg [10:0] cycle = 11'd0;
 	reg doneROM = 1'd0;			// Yes ROM, as its referred thus in the salsa docs
-	reg addrsourceMix = 1'b0;
-	reg datasourceLoad = 1'b0;
-	reg addrsourceSave = 1'b0;
-	reg resultsourceRam = 1'b0;
-	reg xoren = 1'b1;
-	reg [THREADS_BITS+1:0] intcycles = 0;	// Number of interpolation cycles required ... How many do we need? Say THREADS_BITS+1
+	reg addrwriteMix = 1'b0;
+	reg addrreadInit = 1'b0;
+	reg addrreadSave = 1'b0;
+	reg xoren = 1'b0;
+
+	// NB This caclulation does NOT work for ADDRBITS>13 with THREADS=8 or ADDRBITS>14 with THREADS=16
+	parameter INT_BITS = THREADS_BITS - ADDRBITS + 10;	// Max intcycle value is 15 for THREADS=16 and ADDRBITS=10, needing 5 bits
+	// Where INT_BITS==0 we have a full scratchpad and intcycles is not used (though a 1 bit reg[0:0] is still allocated)
+	parameter INT_BITX = (INT_BITS > 0) ? INT_BITS : INT_BITS+1;	// Workaround for compilation errors in unused code branches
+
+	reg [INT_BITS:0] intcycles = 0;						// Number of interpolation cycles required
 
 	wire [511:0] Xmix;
 	reg [511:0] X0;
@@ -108,22 +114,23 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 	assign dout = salsaShiftReg[1023:1024-SBITS];
 
 	// sstate is implemented in ram (alternatively could use a rotating shift register)
-	reg [THREADS_BITS+30:0] sstate [THREADS-1:0];		// NB initialized via a long reset (see pbkdfengine)
+	reg [INT_BITS+28:0] sstate [THREADS-1:0];		// NB initialized via a long reset (see pbkdfengine)
 	// List components of sstate here for ease of maintenance ...
 	wire [2:0] mstate_in;
 	wire [10:0] cycle_in;
 	wire [9:0] writeaddr_in;
 	wire doneROM_in;
-	wire addrsourceMix_in;
-	wire addrsourceSave_in;
-	wire [THREADS_BITS+1:0] intcycles_in;				// How many do we need? Say THREADS_BITS+1
+	wire addrwriteMix_in;
+	wire addrreadInit_in;
+	wire addrreadSave_in;
+	wire [INT_BITS:0] intcycles_in;
 
 	wire [9:0] writeaddr_next = writeaddr_in + 10'd1;
 
 	reg [31:0] snonce [THREADS-1:0];					// Nonce store. Note bidirectional loading below, this will either implement
 														// as registers or dual-port ram, so do NOT integrate with sstate.
 	
-	// NB no busy_in or result_in as these flag are NOT saved on a per-thread basis
+	// NB There is no busy_in or result_in as these flags are NOT saved on a per-thread basis
 
 	// Convert salsaShiftReg to little-endian word format to match scrypt.c as its easier to debug it
 	// this way rather than recoding the SMix salsa to work with original buffer
@@ -171,26 +178,30 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 	
 	wire [15:0] memtop = 16'hfffe;	// One less than the top memory location (per THREAD bank)
 	
-	wire [ADDRBITS-THREADS_BITS-1:0] adj_addr;
+	wire [9-INT_BITS:0] adj_addr;
 
-	if (ADDRBITS < 13)
-		assign adj_addr = (Xaddr[9:THREADS_BITS+10-ADDRBITS] == memtop[9:THREADS_BITS+10-ADDRBITS]) ?
-							memtop[ADDRBITS-THREADS_BITS-1:0] : Xaddr[9:THREADS_BITS+10-ADDRBITS];
+	if (INT_BITS > 0)
+		assign adj_addr = (Xaddr[9:INT_BITS] == memtop[9:INT_BITS]) ?
+							memtop[9-INT_BITS:0] : Xaddr[9:INT_BITS];
 	else
 		assign adj_addr = Xaddr;
 	
-	wire [THREADS_BITS-1:0] phase_addr;
+	wire [THREADS_BITS-1:0] phase_addr;					// Prefix for read address
 	assign phase_addr = phase[THREADS_BITS-1:0];
+	reg [THREADS_BITS-1:0] phase_addr_d = 0;			// Prefix for write address
 
-	// TODO can we remove the +1 and adjust the wr_addr to use the same prefix via phase_d?
-	assign rd_addr = { phase_addr+1, addrsourceSave_in ? memtop[ADDRBITS-THREADS_BITS:1] : adj_addr };	// LSB are ignored
+	assign rd_addr = { phase_addr,
+						(addrreadSave_in | addrreadInit_in) ?
+							(addrreadInit_in ? {ADDRBITS-THREADS_BITS{1'b0}} : memtop[ADDRBITS-THREADS_BITS:1])
+						:
+							adj_addr };
 		
-	wire [9:0] writeaddr_adj = addrsourceMix ? memtop[10:1] : writeaddr;
+	wire [9:0] writeaddr_adj = addrwriteMix ? memtop[10:1] : writeaddr;
 	
-	assign wr_addr1 = { phase_addr, writeaddr_adj[9:THREADS_BITS+10-ADDRBITS] };
-	assign wr_addr2 = { phase_addr, writeaddr_adj[9:THREADS_BITS+10-ADDRBITS] };
-	assign wr_addr3 = { phase_addr, writeaddr_adj[9:THREADS_BITS+10-ADDRBITS] };
-	assign wr_addr4 = { phase_addr, writeaddr_adj[9:THREADS_BITS+10-ADDRBITS] };
+	assign wr_addr1 = { phase_addr_d, writeaddr_adj[9:INT_BITS] };
+	assign wr_addr2 = { phase_addr_d, writeaddr_adj[9:INT_BITS] };
+	assign wr_addr3 = { phase_addr_d, writeaddr_adj[9:INT_BITS] };
+	assign wr_addr4 = { phase_addr_d, writeaddr_adj[9:INT_BITS] };
 
 	// Duplicate address to reduce fanout (its a ridiculous kludge, but seems to be the approved method)
 	
@@ -209,7 +220,8 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 	ram # (.ADDRBITS(ADDRBITS)) ram4_blk (rd_addr4, wr_addr4, ram_clk, ram4_din, ram_wren, ram4_dout);
 	assign ramout = { ram4_dout, ram3_dout, ram2_dout, ram1_dout };	// Unregistered output
 
-	assign { ram4_din, ram3_din, ram2_din, ram1_din } = datasourceLoad ? X : { Xmix, X0out};	// Registered input
+	// Two ram data sources, the initial X value and the salsa output
+	assign { ram4_din, ram3_din, ram2_din, ram1_din } = XCtl[0] ? X : { Xmix, X0out};	// Registered input
 	
 	// Salsa unit
 	
@@ -219,16 +231,9 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 	wire [511:0] Zbits;
 	assign Zbits = {512{xoren}};		// xoren enables xor from ram (else we load from ram)
 	
-	// With luck the synthesizer will interpret this correctly as one-hot control ...
-
-	// DEBUG using default state of 0 for XSnull so as to show up issues with preserved values (previously held value X0/X1)
-	// assign X0in = (XCtl==XSmix) ? X0out : (XCtl==XSram) ? (X0out & Zbits) ^ ramout[511:0] : (XCtl==XSload) ? X[511:0] : 0;
-	// assign X1in = (XCtl==XSmix) ? Xmix : (XCtl==XSram) ? (Xmix & Zbits) ^ ramout[1023:512] : (XCtl==XSload) ? X[1023:512] : 0;
-	
-	// Now using explicit control signals (rather than relying on synthesizer to map correctly)
-	// XSMix is now the default (XSnull is unused as this mapped onto zero in the DEBUG version above) - TODO amend FSM accordingly
-	assign X0in =  XCtl[2] ? (X0out & Zbits) ^ ramout[511:0] : XCtl[0] ? X[511:0] : X0out;
-	assign X1in =  XCtl[2] ? (Xmix & Zbits) ^ ramout[1023:512] : XCtl[0] ? X[1023:512] : Xmix;
+	// XSMix is now the default and the initial load is now done via RAM to simplify the pipeline
+	assign X0in =  XCtl[1] ? (X0out & Zbits) ^ ramout[511:0]    : X0out;
+	assign X1in =  XCtl[1] ? (Xmix  & Zbits) ^ ramout[1023:512] : Xmix;
 
 	// Salsa FSM - TODO may want to move this into a separate function (for floorplanning), see hashvariant-C
 
@@ -236,7 +241,7 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 	// NB must ensure shift and result do NOT overlap by carefully controlling timing of start signal
 	// NB Phase has THREADS+1 cycles, but we do not save the state for (phase==THREADS) as it is never active
 
-	assign { mstate_in, writeaddr_in, cycle_in, doneROM_in, addrsourceMix_in, addrsourceSave_in, intcycles_in} =
+	assign { mstate_in, writeaddr_in, cycle_in, doneROM_in, addrwriteMix_in, addrreadInit_in, addrreadSave_in, intcycles_in} =
 				(phase == THREADS ) ? 0 : sstate[phase];	
 	
 	// Interface FSM ensures threads start evenly (required for correct salsa FSM operation)
@@ -256,11 +261,15 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 	// engine requires busy and result, but this  looks alter itself in the salsa FSM, even though these are global
 	// flags. Reset periodically (on loadnonce in pbkdfengine) to ensure it stays in sync.
 	reg [15:0] start_count = 0;
-	// TODO automatic configuration based on THREADS (currently assumes 8)
-	// Each lookup_gap=2 salsa take on average 9 * (1024 + (1024*1.5)) = 23040 clocks
-	// so start 8 threads at 23040 / 8 = 2880 clock intervals
-	// For lookup_gap=4 use 1024*(4+3+2+1)/4 and for lookup_gap=8 use 1024*(8+..+1)/8 ie 1024*4.5
-	parameter START_INTERVAL = ((ADDRBITS == 12) ? 23040 : (ADDRBITS == 11) ? 36864 : 50688)	/ THREADS;
+
+	// For THREADS=8, lookup_gap=2 salsa takes on average 9*(1024+(1024*1.5)) = 23040 clocks, generically 9*1024*(lookup_gap/2+1.5)
+	// For THREADS=16, use 17*1024*(lookup_gap/2+1.5), where lookupgap is double that for THREADS=8
+	// This is OK, but only does ADDRBITS=10,11,12 ...
+	// parameter START_INTERVAL = (THREADS==16) ?	((ADDRBITS==12) ? 60928 : (ADDRBITS==11) ? 95744 : 165376) / THREADS :	// 16 threads
+	//												((ADDRBITS==12) ? 23040 : (ADDRBITS==11) ? 36864 :  50688) / THREADS ;	//  8 threads
+	// This seems to work OK generically (TODO check full scratchpad) ...
+	parameter START_INTERVAL = (THREADS+1) * 1024 * ((1 << (15-ADDRBITS)) * THREADS / 32 + 3) / THREADS / 2;
+
 	reg start_flag = 1'b0;
 	assign busy = busy_flag;		// Ack to pbkdfengine - this will toggle on transtion through R_START
 `endif
@@ -271,28 +280,30 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 		X1 <= X1in;
 		
 		if (phase_d != THREADS)
-			sstate[phase_d] <= fsmreset ? 0 : { mstate, writeaddr, cycle, doneROM, addrsourceMix, addrsourceSave, intcycles };
+			sstate[phase_d] <= fsmreset ? 0 : { mstate, writeaddr, cycle, doneROM, addrwriteMix, addrreadInit, addrreadSave, intcycles };
 
 		mstate <= mstate_in;		// Set defaults (overridden below as necessary)
 		writeaddr <= writeaddr_in;
 		cycle <= cycle_in;
 		intcycles <= intcycles_in;
 		doneROM <= doneROM_in;
-		addrsourceMix <= addrsourceMix_in;
-		addrsourceSave <= addrsourceSave_in;		// Overwritten below, but addrsourceSave_in is used above
+		addrwriteMix <= addrwriteMix_in;
+		addrreadInit <= addrreadInit_in;
+		addrreadSave <= addrreadSave_in;		// Overwritten below, but addrreadSave_in is used above
 		
 		// Duplicate address to reduce fanout (its a ridiculous kludge, but seems to be the approved method)
 		rd_addr_z_1 <= {ADDRBITS{fsmreset}};
 		rd_addr_z_2 <= {ADDRBITS{fsmreset}};
 		rd_addr_z_3 <= {ADDRBITS{fsmreset}};
 		rd_addr_z_4 <= {ADDRBITS{fsmreset}};
+
+		phase_addr_d <= phase[THREADS_BITS-1:0];
 		
-		XCtl <= XSnull;				// Default states
-		addrsourceSave <= 0;		// NB addrsourceSave_in is the active control so this DOES need to be in sstate
-		datasourceLoad <= 0;		// Does not need to be saved in sstate
-		resultsourceRam <= 0;		// Does not need to be saved in sstate
-		ram_wren <= 0;
-		xoren <= 1;
+		XCtl <= XSmix;				// Default states
+		addrreadInit <= 1'b0;		// NB addrreadInit_in is the active control so this DOES need to be in sstate
+		addrreadSave <= 1'b0;		// Ditto
+		ram_wren <= 1'b0;
+		xoren <= 1'b1;
 		
 		// Interface FSM ensures threads start evenly (required for correct salsa FSM operation)
 		`ifdef ONETHREAD
@@ -318,10 +329,10 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 			nonce_sr <= { nonce_sr[31-SBITS:0], din};
 		end
 		else
-		if (XCtl==XSload && phase_d != THREADS)		// Set at end of previous hash - this is executed regardless of phase		
+		if (XCtl[0] && phase_d != THREADS)		// Set at end of previous hash - this is executed regardless of phase		
 		begin
-			salsaShiftReg <= resultsourceRam ? ramout : { Xmix, X0out };	// Simultaneously with XSload
-			nonce_sr <= snonce[phase_d];									// NB bidirectional load
+			salsaShiftReg <= ramout;			// Simultaneously with XSload
+			nonce_sr <= snonce[phase_d];		// NB bidirectional load
 			snonce[phase_d] <= nonce_sr;
 		end
 		
@@ -340,153 +351,123 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 					// hence the interface FSM at the top of this file)
 					if (phase!=THREADS && start_flag)	// Ensure (phase==THREADS) slot is never active
 					begin
-						XCtl <= XSload;			// First time only (normally done at end of previous salsa cycle=1023)
 						`ifndef ONETHREAD
 							start_flag <= 1'b0;
 						`endif
 						busy_flag <= 1'b0;		// Toggle the busy flag low to ack pbkdfengine (its usually already set
 												// since other threads are running)
-						writeaddr <= 0;			// Preset to write X on next cycle
-						addrsourceMix <= 1'b0;
-						datasourceLoad <= 1'b1;
-						ram_wren <= 1'b1;
 						mstate <= R_START;
+
+						// We cycle the initial data through the RAM to simplify the data path (costs 17 clocks)
+						// Setup to write initial data to ram (on next clock)
+						writeaddr <= 0;
+						addrwriteMix <= 1'b0;
+						ram_wren <= 1'b1;
+
+						// Setup to read initial data back from ram (17 clocks later)
+						XCtl <= XSload;
+						addrreadInit <= 1'b1;
 					end
 				end
-				R_START: begin						// Reentry point after thread completion. ASSUMES new data is ready.
-						XCtl <= XSmix;							
-						writeaddr <= writeaddr_next;
-						cycle <= 0;
-						if (ADDRBITS == 13)
-							ram_wren <= 1'b1;		// Full scratchpad needs to write to addr=001 next cycle
-						doneROM <= 1'b0;
-						busy_flag <= 1'b1;
-						result <= 1'b0;
-						mstate <= R_WRITE;
-					end
-				R_WRITE: begin
-					XCtl <= XSmix;							
+
+				R_START: begin					// Reentry point after thread completion. ASSUMES new data is ready.
+					XCtl <= XSram;				// Load from ram next cycle
+					xoren <= 1'b0;
+					cycle <= 0;
+					doneROM <= 1'b0;
+					busy_flag <= 1'b1;
+					result <= 1'b0;
+					mstate <= R_LOAD;
+				end
+
+				R_LOAD: begin					// Now loading initial data via RAM to simplify data path (costs 17 clocks)
 					writeaddr <= writeaddr_next;
+					if (INT_BITS == 0)
+						ram_wren <= 1'b1;		// Full scratchpad needs to write to addr=001 next cycle
+					mstate <= R_WRITE;
+				end
+
+				R_WRITE: begin
+					writeaddr <= writeaddr_next;
+
 					if (writeaddr_in==1022)
-						doneROM <= 1'b1;			// Need to do one more cycle to update X0,X1
-					else
-					if (~doneROM_in)
-					begin
-						if (ADDRBITS < 13)
-							ram_wren <= ~|writeaddr_next[THREADS_BITS+9-ADDRBITSX:0];	// Only write non-interpolated addresses
-						else
-							ram_wren <= 1'b1;
-					end
+						doneROM <= 1'b1;		// Need to do one more cycle to update X0,X1
 					
 					if (doneROM_in)
 					begin
-						addrsourceMix <= 1'b1;		// Remains set for duration of R_MIX
+						addrwriteMix <= 1'b1;	// Remains set for duration of R_MIX
 						mstate <= R_MIX;
-						XCtl <= XSram;				// Load from ram next cycle
+						XCtl <= XSram;			// Load from ram next cycle (xor'd with XMix)
 						// Need this to cover the case of the initial read being interpolated
 						// NB CODE IS REPLICATED IN R_MIX
-						if (ADDRBITS < 13)
+						if (INT_BITS > 0)
 						begin
-							intcycles <= { {THREADS_BITS+12-ADDRBITSX{1'b0}}, Xaddr[THREADS_BITS+9-ADDRBITSX:0] };	// Interpolated addresses
+							intcycles <= { 1'b0, Xaddr[INT_BITX-1:0] };	// Interpolated addresses
+							if ( Xaddr[9:INT_BITX] ==  memtop[10-INT_BITX:1] )			// Highest address reserved
+								intcycles <= { 1'b1, Xaddr[INT_BITX-1:0] };
 
-							if ( Xaddr[9:THREADS_BITS+10-ADDRBITSX] ==  memtop[ADDRBITSX-THREADS_BITS:1] )			// Highest address reserved
-								intcycles <= { {THREADS_BITS+11-ADDRBITSX{1'b0}}, 1'b1, Xaddr[THREADS_BITS+9-ADDRBITSX:0] };
-
-							if ( (Xaddr[9:THREADS_BITS+10-ADDRBITSX] == memtop[ADDRBITSX-THREADS_BITS:1]) || |Xaddr[THREADS_BITS+9-ADDRBITSX:0] )
+							if ( (Xaddr[9:INT_BITX] == memtop[10-INT_BITX:1]) || |Xaddr[INT_BITX-1:0] )
 							begin
 								ram_wren <= 1'b1;
-								xoren <= 0;						// Will do direct load from ram, not xor
+								xoren <= 1'b0;					// Will do direct load from ram, not xor
 								mstate <= R_INT;				// Interpolate
 							end
 							// If intcycles will be set to 1, need to preset for readback
 							if ( 
-								( Xaddr[THREADS_BITS+9-ADDRBITSX:0] == 1 ) &&
-								!( Xaddr[9:THREADS_BITS+10-ADDRBITSX] ==  memtop[ADDRBITSX-THREADS_BITS:1] )
+								( Xaddr[INT_BITX-1:0] == 1 ) &&
+								!( Xaddr[9:INT_BITX] ==  memtop[10-INT_BITX:1] )
 								)
-									addrsourceSave <= 1'b1;		// Preset to read saved data (9 clocks later)
+									addrreadSave <= 1'b1;		// Preset to read saved data (17 clocks later)
 						end
 						// END REPLICATED BLOCK
-					end
-				end
-				R_MIX: begin
-					// NB There is an extra step here cf R_WRITE above to read ram data hence 9 not 8 stages.
-					XCtl <= XSmix;							
-					cycle <= cycle_in + 11'd1;
-					if (cycle_in==1023)
-					begin
-						busy_flag <= 1'b0;	// Will hold at 0 for 9 clocks until set at R_START
-						if (fsmstart)			// Check data input is ready
-						begin
-							XCtl <= XSload;		// Initial load else we overwrite input NB This is
-												// executed on the next cycle, regardless of phase
-							// Flag the SHA256 FSM to start final PBKDF2_SHA256_80_128_32
-							result <= 1'b1;
-							mstate <= R_START;		// Restart immediately
-							writeaddr <= 0;			// Preset to write X on next cycle
-							datasourceLoad <= 1'b1;
-							addrsourceMix <= 1'b0;
-							ram_wren <= 1'b1;
-						end
-						else
-						begin
-							// mstate <= R_IDLE;		// Wait for start_flag
-							mstate <= R_WAIT;
-							addrsourceSave <= 1'b1;		// Preset to read saved data (9 clocks later)
-							ram_wren <= 1'b1;			// Save result
-						end
 					end
 					else
 					begin
-						XCtl <= XSram;				// Load from ram next cycle
+						ram_wren <=	(INT_BITS > 0) ? ~|writeaddr_next[INT_BITX-1:0] : 1'b1;					
+					end
+				end
+
+				R_MIX: begin
+					// NB There is an extra step here cf R_WRITE above to read ram data hence 9 not 8 stages.
+					cycle <= cycle_in + 11'd1;
+					if (cycle_in==1023)
+					begin
+						// We now ALWAYS write result to ram, thus simplifying the data path at the cost of 17 clock cycles
+						mstate <= R_WAIT;
+						addrreadSave <= 1'b1;		// Preset to read saved data (17 clocks later)
+						ram_wren <= 1'b1;			// Save result
+					end
+					else
+					begin
+						XCtl <= XSram;				// Load from ram next cycle (xor'd with XMix)
 						// NB CODE IS REPLICATED IN R_WRITE
-						if (ADDRBITS < 13)
+						if (INT_BITS > 0)
 						begin
-							intcycles <= { {THREADS_BITS+12-ADDRBITSX{1'b0}}, Xaddr[THREADS_BITS+9-ADDRBITSX:0] };	// Interpolated addresses
+							intcycles <= { 1'b0, Xaddr[INT_BITX-1:0] };			// Interpolated addresses
+							if ( Xaddr[9:INT_BITX] ==  memtop[10-INT_BITX:1] )	// Highest address reserved
+								intcycles <= { 1'b1, Xaddr[INT_BITX-1:0] };
 
-							if ( Xaddr[9:THREADS_BITS+10-ADDRBITSX] ==  memtop[ADDRBITSX-THREADS_BITS:1] )			// Highest address reserved
-								intcycles <= { {THREADS_BITS+11-ADDRBITSX{1'b0}}, 1'b1, Xaddr[THREADS_BITS+9-ADDRBITSX:0] };
-
-							if ( (Xaddr[9:THREADS_BITS+10-ADDRBITSX] == memtop[ADDRBITSX-THREADS_BITS:1]) || |Xaddr[THREADS_BITS+9-ADDRBITSX:0] )
+							if ( (Xaddr[9:INT_BITX] == memtop[10-INT_BITX:1]) || |Xaddr[INT_BITX-1:0] )
 							begin
 								ram_wren <= 1'b1;
-								xoren <= 0;						// Will do direct load from ram, not xor
+								xoren <= 1'b0;					// Will do direct load from ram, not xor
 								mstate <= R_INT;				// Interpolate
 							end
 							// If intcycles will be set to 1, need to preset for readback
 							if ( 
-								( Xaddr[THREADS_BITS+9-ADDRBITSX:0] == 1 ) &&
-								!( Xaddr[9:THREADS_BITS+10-ADDRBITSX] ==  memtop[ADDRBITSX-THREADS_BITS:1] )
+								( Xaddr[INT_BITX-1:0] == 1 ) &&
+								!( Xaddr[9:INT_BITX] ==  memtop[10-INT_BITX:1] )
 								)
-									addrsourceSave <= 1'b1;		// Preset to read saved data (9 clocks later)
+									addrreadSave <= 1'b1;		// Preset to read saved data (17 clocks later)
 						end
 						// END REPLICATED BLOCK
 					end
 				end
 
-				R_WAIT: begin
-						if (fsmstart)			// Check data input is ready
-						begin
-							XCtl <= XSload;		// Initial load else we overwrite input NB This is
-												// executed on the next cycle, regardless of phase
-							// Flag the SHA256 FSM to start final PBKDF2_SHA256_80_128_32
-							result <= 1'b1;
-							mstate <= R_START;		// Restart immediately
-							writeaddr <= 0;			// Preset to write X on next cycle
-							datasourceLoad <= 1'b1;
-							resultsourceRam <= 1'b1;
-							addrsourceMix <= 1'b0;
-							ram_wren <= 1'b1;
-						end
-						else
-							addrsourceSave <= 1'b1;		// Preset to read saved data (9 clocks later)
-				end
-				
-				R_INT: begin
-					// Interpolate scratchpad for odd addresses
-					XCtl <= XSmix;							
+				R_INT: begin					// Interpolate scratchpad for odd addresses
 					intcycles <= intcycles_in - 1;
 					if (intcycles_in==2)
-						addrsourceSave <= 1'b1;	// Preset to read saved data (9 clocks later)
+						addrreadSave <= 1'b1;	// Preset to read saved data (17 clocks later)
 					if (intcycles_in==1)
 					begin
 						XCtl <= XSram;			// Setup to XOR from saved X0/X1 in ram at next cycle
@@ -494,12 +475,34 @@ module salsaengine (hash_clk, reset, din, dout, shift, start, busy, result );
 					end
 					// Else mstate remains at R_INT so we continue interpolating
 				end
+
+				R_WAIT: begin
+						if (fsmstart)			// Check data input is ready
+						begin
+							// Flag the SHA256 FSM to start final PBKDF2_SHA256_80_128_32
+							busy_flag <= 1'b0;		// Will hold at 0 for 17 clocks until set at R_START
+							result <= 1'b1;
+							mstate <= R_START;		// Restart immediately
+
+							// We cycle the initial data through the RAM to simplify the data path (costs 17 clocks)
+							// Setup to write initial data to ram (on next clock)
+							writeaddr <= 0;			// Preset to write X on next cycle
+							addrwriteMix <= 1'b0;
+							ram_wren <= 1'b1;
+							
+							// Setup to read initial data back from ram (17 clocks later)
+							XCtl <= XSload;
+							addrreadInit <= 1'b1;
+						end
+						else
+							addrreadSave <= 1'b1;		// Preset to read saved data (17 clocks later)
+				end
 			endcase
 		end
 `ifdef SIM
 	// Print the final Xmix for each cycle to compare with scrypt.c (debugging)
-	if (mstate==R_MIX)
-		$display ("phase %d cycle %d Xmix %08x\n", phase, cycle-1, Xmix[511:480]);
+	// if (mstate==R_MIX)
+	//	$display ("phase %d cycle %d Xmix %08x\n", phase, cycle-1, Xmix[511:480]);
 `endif
 	end	// always @(posedge hash_clk)
 endmodule

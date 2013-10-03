@@ -34,7 +34,7 @@ module ltcminer_icarus (osc_clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip,
 `ifdef SPEED_MHZ
 	parameter SPEED_MHZ = `SPEED_MHZ;
 `else
-	parameter SPEED_MHZ = 25;						// Default to slow, use dynamic config to ramp up in realtime
+	parameter SPEED_MHZ = 40;						// Default to slow, use dynamic config to ramp up in realtime
 `endif
 
 `ifdef SPEED_LIMIT
@@ -68,7 +68,7 @@ module ltcminer_icarus (osc_clk, RxD, TxD, led, extminer_rxd, extminer_txd, dip,
 `ifdef LOCAL_MINERS
 	parameter LOCAL_MINERS = `LOCAL_MINERS;
 `else
-	parameter LOCAL_MINERS = 1;						// One to four cores (configures ADDRBITS automatically)
+	parameter LOCAL_MINERS = 2;						// One to four cores (configures ADDRBITS automatically)
 `endif
 
 `ifdef ADDRBITS
