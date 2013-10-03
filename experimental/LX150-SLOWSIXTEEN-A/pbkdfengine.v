@@ -47,7 +47,7 @@ module pbkdfengine
 	output salsa_start;
 	output reg salsa_shift = 1'b0;	// NB hash_clk domain
 
-	reg [4:0]resetcycles = 4'd0;
+	reg [4:0]resetcycles = 5'd0;
 	reg reset = 1'b0;
 	assign salsa_reset = reset;		// Propagate reset to salsaengine
 
@@ -57,16 +57,16 @@ module pbkdfengine
 
 	always @ (posedge pbkdf_clk)
 	begin
-		// Hard code a 31 cycle reset (NB assumes THREADS=16 in salsaengine, else we need more)
+		// Hard code a 24 cycle reset (NB assumes THREADS=16 in salsaengine, else we need more)
 		// NB hash_clk is faster than pbkdf_clk so the salsaengine will actually be initialised well before
-		// this period ends, but keep to 15 for now as simulation uses equal pbkdf and salsa clock speeds.
+		// this period ends, but keep to 24 for now as simulation uses equal pbkdf and salsa clock speeds.
 		resetcycles <= resetcycles + 1'd1;
-		if (resetcycles == 0)
+		if (resetcycles == 5'd0)
 			reset <= 1'b1;
-		if (resetcycles == 31)
+		if (resetcycles == 5'd24)
 		begin
 			reset <= 1'b0;
-			resetcycles <= 31;
+			resetcycles <= 5'd24;
 		end
 `ifdef WANTCYCLICRESET		
 		// Cyclical reset every 2_500_000 clocks to ensure salsa pipeline does not drift out of sync
@@ -581,6 +581,11 @@ module pbkdfengine
 				end
 			endcase	
 		end
+`ifdef SIM
+	// Print the final Xmix for each cycle to compare with scrypt.c (debugging)
+	if (state==S_R18)
+		$display ("final_hash %x\n", tx_hash);
+`endif
 	end
 
 	// Shift register control - NB hash_clk domain
