@@ -54,6 +54,8 @@ LX150-SLOWSIXTEEN-A Added a pipeline stage between column and row operations. Si
                    default is 25MHz, so increase it at runtime via the mining script)
                    giving aroung 16khash/sec per LX150 (33khash/sec total for Lancelot).
 
+LX150-SIXTYFOUR-A  Included for completeness, its performance is quite poor.
+
 The later versions (LX150-EIGHT onwards) are built in PlanAhead version 14.4 (32 bits)
 using the following modified synthesis settings (strategy defined in Tools/Options) ...
 
