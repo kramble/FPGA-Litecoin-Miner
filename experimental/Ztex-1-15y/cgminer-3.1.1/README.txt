@@ -4,6 +4,7 @@ I don't think its appropriate to fork the repository in this case so I will
 just supply patches to specific release versions.
 
 WARNING - This is a VERY rough initial port. Its horribly buggy.
+In particular the icarus (cainsmore) hash rate reported is completely wrong.
 
 Compilation
 Open the official repository (link above) in your browser, click the "branches"
@@ -15,11 +16,14 @@ Copy my patch files (from this github folder) into the official cgminer 3.1.1 fo
 replacing existing files as necessary. Build as normal, see the README or windows-build.txt
 NB Opencl should be disabled in the configuration (it may work, but I've not tested it)
 ./autogen.sh
-CFLAGS="-O2" ./configure --enable-ztex --enable-scrypt --disable-opencl
+CFLAGS="-O2" ./configure --enable-ztex --enable-icarus --enable-scrypt --disable-opencl
 It will show scrypt as disabled, but this is a lie (my horrible hack hard codes it to be
 enabled since my coding skills are not up to mofifying the config).
 
-Prebuit windows binary at https://www.dropbox.com/s/j00wu49vsdow1ig/cgminer.exe
+Prebuit windows binary (supports both CM1 and ztex) at ...
+https://www.dropbox.com/s/kxvv0hicmgletr1/cgminer.exe
+
+Old (ztex-only) version still at https://www.dropbox.com/s/j00wu49vsdow1ig/cgminer.exe
 
 Dependancies (DLL) at https://www.dropbox.com/s/unfq6sk8jm3k6j2/cgminer-3.1.1-scryptfpga.zip
 
@@ -35,9 +39,12 @@ cgminer --scrypt --disable-gpu --url pool:port --userpass username:password 2>lo
 
 Notes:
 Should you have problems, redirect the stderr output to log.txt and examine this for messages.
-You may want to add --verbose for additional output, --debug may crash on windows though.
 Do not use this for GPU mining as it will not work.
 Do not use this for bitcoin mining as it will not work.
+The --debug and --verbose switches may crash the program in windows. Using the -T switch
+perhaps will work around this (it disables curses).
+
+Ztex
 Only the ztex 1.15y board is supported. Frequency management is automatic using the
 same algorithm as bitcoin. It can be overriden by the --ztex-clock option as follows
 --ztex-clock 120:140	sets initial clock of 120MHz, max of 140Mhz
@@ -47,4 +54,14 @@ I don't know if this will work for multiple boards, but its done the same way as
 the icarus options so with luck it will be OK.
 The clock resolution is 4MHz (rounds down) and the valid range is 100MHz to 250MHz.
 If --ztex-clock is not used the default range is 124MHz to 196MHz.
-NB The clock speed is divided by 8 internally for hashing purposes.
+NB The clock speed is divided by 4 internally for hashing purposes.
+
+Cainsmore
+Cainsmore CM1 will be detected as icarus
+Use the -S option eg.  -S \\.\COM20 -S \\.\COM21 -S \\.\COM22 -S \\.\COM23 
+It will not work for my current lancelot bitstream, use the python miner instead.
+Clock speed can be set with --cainsmore-clock which takes a single value eg
+--cainsmore-clock 150				sets all devices to 150MHz
+--cainsmore-clock 140,145,150,155	sets individual device speeds
+The clock resolution is 2.5MHz (rounds down) and the valid range is 50MHz to 220MHz.
+If --cainsmore-clock is not used the default is 150MHz

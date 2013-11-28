@@ -1,0 +1,41 @@
+# UCF for a Cairnsmore1 board
+NET "clk_n" LOC = "J1" |IOSTANDARD = "LVDS_33";			//25Mhz Differential Source Clock from Controller
+NET "clk_p" LOC = "J3" |IOSTANDARD = "LVDS_33";			//25Mhz Differential Source Clock from Controller
+NET "clk_comm" LOC = "C1" |IOSTANDARD = "LVCMOS33";	//25Mhz Clock for UART from controller
+NET "clk_comm" CLOCK_DEDICATED_ROUTE = FALSE;			//Grrr...
+
+# serial port receive & transmit
+NET "RxD" LOC = "C3"	|IOSTANDARD = "LVCMOS33" |PULLUP;		// USB5 input
+NET "TxD" LOC = "F2" |IOSTANDARD = "LVCMOS33" |SLEW="QUIETIO";	// USB7 output
+
+# LED Array
+NET "led[0]" LOC = "A18" |IOSTANDARD = "LVCMOS33" |SLEW="QUIETIO";
+NET "led[1]" LOC = "B18" |IOSTANDARD = "LVCMOS33" |SLEW="QUIETIO";
+NET "led[2]" LOC = "A17" |IOSTANDARD = "LVCMOS33" |SLEW="QUIETIO";
+NET "led[3]" LOC = "A16" |IOSTANDARD = "LVCMOS33" |SLEW="QUIETIO";
+
+# DIP Switch Array
+NET "dip[0]" LOC = "A4" |IOSTANDARD = "LVCMOS33";
+NET "dip[1]" LOC = "D6" |IOSTANDARD = "LVCMOS33";
+NET "dip[2]" LOC = "C6" |IOSTANDARD = "LVCMOS33";
+NET "dip[3]" LOC = "C8" |IOSTANDARD = "LVCMOS33";
+
+# New split reset architecture:
+NET "reset_a" LOC = "B22" |IOSTANDARD = "LVCMOS33";
+NET "reset_b" LOC = "D1" |IOSTANDARD = "LVCMOS33";
+NET "reset_select" LOC = "D7" |PULLUP |IOSTANDARD = "LVCMOS33";
+
+# Input Clocks from Controller
+NET "clk_dcm" TNM_NET = clk_dcm;
+NET "clk_comm" TNM_NET = clk_comm;
+TIMESPEC TS_clk_dcm = PERIOD "clk_dcm" 25 MHz HIGH 50 %;
+TIMESPEC TS_clk_comm = PERIOD "clk_comm" 25 MHz HIGH 50 %;
+
+# Various Timing Ignores
+NET "clk_dcm" TNM_NET =  FFS "GRP_HASH";
+NET "clk_comm" TNM_NET =  FFS "GRP_COMM";
+TIMESPEC TS_Boundry1 = FROM "GRP_HASH" TO "GRP_COMM" TIG ;
+TIMESPEC TS_Boundry2 = FROM "GRP_COMM" TO "GRP_HASH" TIG ;
+
+#VCCAUX Line Config From makomk
+CONFIG VCCAUX=3.3;

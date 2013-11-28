@@ -839,6 +839,7 @@ extern bool opt_delaynet;
 extern bool opt_restart;
 extern char *opt_icarus_options;
 extern char *opt_icarus_timing;
+extern char *opt_cainsmore_clock;	// KRAMBLE
 extern char *opt_ztex_clock;		// KRAMBLE
 extern bool opt_worktime;
 #ifdef USE_AVALON
