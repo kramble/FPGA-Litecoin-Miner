@@ -72,6 +72,7 @@ struct libztex_device {
 	double errorWeight[256];
 	double errorRate[256];
 	double maxErrorRate[256];
+	int lockClock;				// KRAMBLE
 
 	int16_t nonceCheckValid;
 

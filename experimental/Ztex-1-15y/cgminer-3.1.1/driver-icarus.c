@@ -610,10 +610,10 @@ static void get_clocks(int this_option_offset, int *cainsmore_clock)
 	if (*buf) {
 		tmp = atoi(buf);
 
-		if (tmp >= 50 && tmp <= 220)
+		if (tmp >= 50 && tmp <= 300)			// 120 * 2.5 MHz (DCM_MULTIPLIER_CAP=120 cf 88 in original)
 				*cainsmore_clock = tmp * 2 / 5;	// NB 2.5Mhz units
 			else {
-				sprintf(err_buf, "Invalid cainsmore-clock must be between 100 and 250", buf);
+				sprintf(err_buf, "Invalid cainsmore-clock must be between 100 and 300", buf);
 				quit(1, err_buf);
 			}
 	}
