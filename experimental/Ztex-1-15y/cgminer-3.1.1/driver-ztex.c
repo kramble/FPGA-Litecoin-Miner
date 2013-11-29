@@ -298,7 +298,8 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 				lastnonce[i] = nonce;
 				
 			// KRAMBLE try forcing overflow every so often to see if this fixes DIFF & SICK problems
-			if (nonce > 0x00040000)	// Overflow every 256k nonces (a few times a minute, depending on hash rate)
+			// if (nonce > 0x00040000)	// Overflow every 256k nonces (a few times a minute, depending on hash rate)
+			if (nonce > 0x00100000)	// Overflow every 1M nonces (single core needs larger range to avoid duplicates)
 			{
 				// applog(LOG_INFO, "%s: force overflow nonce=%08x lastnonce=%08x", ztex->repr, nonce, lastnonce[i]);	// KRAMBLE not in production
  				overflow = true;
@@ -371,15 +372,16 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 	if (ztex->errorRate[ztex->freqM] > ztex->maxErrorRate[ztex->freqM])
 		ztex->maxErrorRate[ztex->freqM] = ztex->errorRate[ztex->freqM];
 
-#if 1	// KRAMBLE OPTIONALLY DISABLE
-	if (!ztex_updateFreq(ztex)) {
-		// Something really serious happened, so mark this thread as dead!
-		free(lastnonce);
-		free(backlog);
-		
-		return -1;
+	// KRAMBLE Disable ztex_updateFreq if lockClock flag set (ie --ztex-clock set initial and max freq to the same value)
+	if (!ztex->lockClock) {
+		if (!ztex_updateFreq(ztex)) {
+			// Something really serious happened, so mark this thread as dead!
+			free(lastnonce);
+			free(backlog);
+			
+			return -1;
+		}
 	}
-#endif
 
 	applog(LOG_DEBUG, "%s: exit %1.8X", ztex->repr, noncecnt);
 
@@ -474,7 +476,12 @@ static bool ztex_prepare(struct thr_info *thr)
 				tmp = atoi(colon);
 				if (tmp >= 100 && tmp <= 250) {
 					if (tmp/4 - 1 >= ztex->freqM)
+					{
 						ztex->freqMaxM = tmp/4 - 1;	// NB 4Mhz units
+						// If both initial and max were set, and were the same, lock the clock
+						if (ztex->freqMDefault == ztex->freqMaxM)
+							ztex->lockClock = 1;
+					}
 					else
 					{
 						sprintf(err_buf, "Invalid ztex_clock max must be less than min", buf);

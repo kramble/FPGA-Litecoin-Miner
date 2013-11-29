@@ -21,9 +21,7 @@ It will show scrypt as disabled, but this is a lie (my horrible hack hard codes 
 enabled since my coding skills are not up to mofifying the config).
 
 Prebuit windows binary (supports both CM1 and ztex) at ...
-https://www.dropbox.com/s/kxvv0hicmgletr1/cgminer.exe
-
-Old (ztex-only) version still at https://www.dropbox.com/s/j00wu49vsdow1ig/cgminer.exe
+https://www.dropbox.com/s/zxtzthpmhr5p66i/cgminer.exe
 
 Dependancies (DLL) at https://www.dropbox.com/s/unfq6sk8jm3k6j2/cgminer-3.1.1-scryptfpga.zip
 
@@ -54,6 +52,7 @@ I don't know if this will work for multiple boards, but its done the same way as
 the icarus options so with luck it will be OK.
 The clock resolution is 4MHz (rounds down) and the valid range is 100MHz to 250MHz.
 If --ztex-clock is not used the default range is 124MHz to 196MHz.
+Setting both initial and max speeds the same will disable automatic changes.
 NB The clock speed is divided by 4 internally for hashing purposes.
 
 Cainsmore
@@ -63,5 +62,6 @@ It will not work for my current lancelot bitstream, use the python miner instead
 Clock speed can be set with --cainsmore-clock which takes a single value eg
 --cainsmore-clock 150				sets all devices to 150MHz
 --cainsmore-clock 140,145,150,155	sets individual device speeds
-The clock resolution is 2.5MHz (rounds down) and the valid range is 50MHz to 220MHz.
+The clock resolution is 2.5MHz (rounds down) and the valid range is 50MHz to 300MHz.
 If --cainsmore-clock is not used the default is 150MHz
+NB The clock speed is divided by 4 internally for hashing purposes.
