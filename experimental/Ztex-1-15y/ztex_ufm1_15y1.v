@@ -32,8 +32,8 @@ module ztex_ufm1_15y1 (fxclk_in, reset, select, clk_reset, pll_stop,  dcm_progcl
 	endfunction
 
 // Configure cores here since using `ifdef rather than generate (lazy)
-`define DUALCORE					// Comment out for single core
-//`define PROTOCOL80				// Select 80 or 76 byte protocol
+//`define DUALCORE					// Comment out for single core (actually performs better)
+//`define PROTOCOL80				// Select 80 or 76 byte protocol (NB use 76 for current cgminer)
 
 `ifdef DUALCORE
 	localparam LOCAL_MINERS = 2;	// One or two cores (configures ADDRBITS automatically)
@@ -86,7 +86,9 @@ module ztex_ufm1_15y1 (fxclk_in, reset, select, clk_reset, pll_stop,  dcm_progcl
 		DCM_CLKGEN #(
 			.CLKFX_DIVIDE(4),
 			.CLKFX_MULTIPLY(16),		// Will be 32 or higher when set dynamically
-			.CLKFXDV_DIVIDE(8),			// NB using CLKFXDV output 24 MHz (test)
+			// .CLKFXDV_DIVIDE(8),		// NB using CLKFXDV output (original version up to v03)
+			.CLKFXDV_DIVIDE(4),			// Single core can run faster, but firmware limit is 248Mhz so double it at v04
+										// CARE cgminer clock now needs to be 124MHz or thereabouts instead of 248MHz
 			.CLKIN_PERIOD(20.8333)		// 48MHz input
 		) 
 		dcm0 (

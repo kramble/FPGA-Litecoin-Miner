@@ -3,7 +3,8 @@ NET "fxclk_in"  LOC = "L22" | IOSTANDARD = LVCMOS33;
 # TIMESPEC "TS_fxclk_in" = PERIOD "fxclk_in" 20.3ns HIGH 50 %;
 
 NET "clk"  TNM_NET = "clk";
-TIMESPEC "TS_clk" = PERIOD "clk" 15MHz HIGH 50 %;
+# Single core ...
+TIMESPEC "TS_clk" = PERIOD "clk" 46MHz HIGH 50 %;
 
 NET "select"  LOC = "AB11" | IOSTANDARD = LVCMOS33 ;
 
