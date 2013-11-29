@@ -18,7 +18,11 @@ https://www.dropbox.com/s/dxv1rj1d3rjmmzq/hashvoodoo-ltc-v03a-1core-fmax-39.bit
 This runs at around 200MHz (use --cainsmore-clock to override the default 175MHz) giving approx
 40kHash/sec total at the pool (ignore the cgminer stats as they are currently complete garbage).
 
-A dual core bitstream is not yet available (I'm still trying to get the xilinx ISE it to route it).
+Faster version https://www.dropbox.com/s/08ccjjvmfgmxcbi/hashvoodoo-ltc-v03ab-1core-fmax-49.bit
+This will run at around 250MHz or more giving perhaps 55kHash/sec.
+
+A dual core bitstream is not yet available (I'm still trying to get the xilinx ISE it to route it,
+though the single core version above is probably just as effective).
 
 You will need the patched version of cgminer-3.1.1 from
 https://github.com/kramble/FPGA-Litecoin-Miner/tree/master/experimental/Ztex-1-15y/cgminer-3.1.1

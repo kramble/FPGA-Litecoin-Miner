@@ -30,13 +30,13 @@ module HASHVOODOO (
 	parameter CLOCK_RATE = 25000000;					//Input Clock Output from Controller in Hz
 	parameter DCM_DIVIDER = 10;						//Starting point for DCM divider (25Mhz / 10 = 2.5Mhz increments)
 	parameter DCM_MULTIPLIER_START = 70;			//Starting point for DCM multiplier (2.5Mhz x 70 = 175Mhz)
-	parameter DCM_MULTIPLIER_CAP = 88;				//Max Point Allowed for DCM multiplier (Safety ceiling)
+	parameter DCM_MULTIPLIER_CAP = 120;				//Max Point Allowed for DCM multiplier (Safety ceiling) - KRAMBLE now 300MHz
 	parameter DCM_MULTIPLIER_MIN = 20;				//Minimum Allowed for DCM multiplier (If it falls below this something is seriously wrong)
 	parameter UART_BAUD_RATE = 115200;				//Baud Rate to use for UART (BPS)
 	parameter UART_SAMPLE_POINT = 8;					//Point in the oversampled wave to sample the bit state for the UART (6-12 should be valid)
 	parameter CLOCK_FLASH_BITS = 26;					//Number of bits for divider of flasher. (28bit = approx 67M Divider)
 
-`define DUALCORE					// Comment out for single core
+// `define DUALCORE					// Comment out for single core (dual core does not currently route)
 
 `ifdef DUALCORE
 	localparam LOCAL_MINERS = 2;	// One or two cores (configures ADDRBITS automatically)
