@@ -29,6 +29,8 @@
  *      nonce range is completely calculated.
  */
 
+//#define LANCELOT84		// KRAMBLE Lancelot 84byte protocol, comment out for cainsmore CM1
+ 
 #include "config.h"
 #include "miner.h"
 
@@ -628,8 +630,11 @@ static bool icarus_detect_one(const char *devpath)
 	struct timeval tv_start, tv_finish;
 	int fd;
 
-	// int numbytes = 80;			// KRAMBLE 80 byte protocol
+#ifdef LANCELOT84
+	int numbytes = 84;				// KRAMBLE 84 byte protocol
+#else
 	int numbytes = 76;				// KRAMBLE 76 byte protocol
+#endif
 
 /*		
 	Just a random diff=2 share ...
@@ -639,17 +644,27 @@ static bool icarus_detect_one(const char *devpath)
 	Share found 00000047
  */
 
+#ifdef LANCELOT84
+	const char golden_ob[] =
+		"00007fff00000000"					// Prefix with diff=2 target (00007fff) and initial nonce 00000000
+		"12192c1b70c094521b40cc61cdb83632"
+		"5924f2c97d9427fbd55091040ed1e7b3"
+		"0de7dcff8dde0ba8979f8506202b8e8a"
+		"bb00ad2e9fa81441d8be667893ce1297"
+		"37c9908d6983412401000000";
+#else
 	const char golden_ob[] =
 		"12192c1b70c094521b40cc61cdb83632"
 		"5924f2c97d9427fbd55091040ed1e7b3"
 		"0de7dcff8dde0ba8979f8506202b8e8a"
 		"bb00ad2e9fa81441d8be667893ce1297"
 		"37c9908d6983412401000000";
+#endif
 	
 	const char golden_nonce[] = "00000047";
 	const uint32_t golden_nonce_val = 0x00000047;
 
-	unsigned char ob_bin[80], nonce_bin[ICARUS_READ_SIZE];
+	unsigned char ob_bin[84], nonce_bin[ICARUS_READ_SIZE];
 	char *nonce_hex;
 
 	int baud, work_division, fpga_count;
@@ -659,7 +674,11 @@ static bool icarus_detect_one(const char *devpath)
 	// KRAMBLE Units 2.5MHz Min 20, Max 88
 	// NB Divided by 4 internally so 200MHz gives 50MHz pbkdf/salsa clock
 
-	int cainsmore_clock_speed = 60;			// KRAMBLE 150MHz default
+#ifdef LANCELOT84
+	int cainsmore_clock_speed = 45;			// Actual MHz (max is around 50MHz for dualcore bitstream)
+#else
+	int cainsmore_clock_speed = 60;			// 150MHz default
+#endif
 	
 	get_clocks(this_option_offset, &cainsmore_clock_speed);
 	// applog(LOG_INFO, "cainsmore set clock: %dMHz", cainsmore_clock_speed * 5 / 2);	// Works, but crashes !!
@@ -679,8 +698,20 @@ static bool icarus_detect_one(const char *devpath)
 	memset(nonce_bin, 0, sizeof(nonce_bin));
 	icarus_gets(nonce_bin, fd, &tv_finish, NULL, 1);
 
+#ifndef LANCELOT84
+#endif
+
+#ifdef LANCELOT84
+	// Send packet to set LANCELOT clock speed - expects units of MHz, but cainsmore_clock_speed
+	// has a reasonable range (command line parameter / 2.5) so use this directly for now (with tweaked
+	// intial value above)
+	ob_bin[0] = cainsmore_clock_speed;
+	ob_bin[1] = 255 - cainsmore_clock_speed;	// ones complement
+	icarus_write(fd, ob_bin, numbytes);
+#else	
 	int cainsmore_ret = cairnsmore_send_cmd(fd, 0, cainsmore_clock_speed, false);
 	// applog(LOG_ERR, "cainsmore set clock: %s", cainsmore_ret ? "true" : "false");	// Works, but crashes !!
+#endif
 
 	icarus_close(fd);	// KRAMBLE MOVED below (2 places)
 
@@ -778,16 +809,19 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	struct ICARUS_INFO *info;
 
-	// int numbytes = 80;			// KRAMBLE 80 byte protocol
+#ifdef LANCELOT84
+	int numbytes = 84;				// KRAMBLE 84 byte protocol
+#else
 	int numbytes = 76;				// KRAMBLE 76 byte protocol
+#endif
 
 	// KRAMBLE work around BUG where same work is sent multiple times causing duplicate shares
 #define KRAMBLE_MAXICARUS 256				// Ought to dynamically allocate this according to icarus->device_id
 	static uint32_t kramble_submitted_nonce[KRAMBLE_MAXICARUS];
-	static unsigned char kramble_prev_ob_bin[80*KRAMBLE_MAXICARUS];
+	static unsigned char kramble_prev_ob_bin[84*KRAMBLE_MAXICARUS];
 	
-	// KRAMBLE ob_bin[80] allows for either 76 or 80 byte protocol
-	unsigned char ob_bin[80], nonce_bin[ICARUS_READ_SIZE];
+	// KRAMBLE ob_bin[84] allows for either 76 or 84 byte protocol
+	unsigned char ob_bin[84], nonce_bin[ICARUS_READ_SIZE];
 	char *ob_hex;
 	uint32_t nonce;
 	int64_t hash_count;
@@ -819,8 +853,15 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 
 	fd = icarus->device_fd;
 
-	memcpy(ob_bin, work->data, numbytes);	// KRAMBLE
+#ifdef LANCELOT84
+	const unsigned char noncetarg[] = "\0\0\0\0\xff\x7f\0\0";	// initial nonce 00000000 and diff=2 target (00007fff)
+	memcpy(ob_bin, work->data, 76);
+	memcpy(ob_bin+76, noncetarg, 8);
 	rev(ob_bin, numbytes);
+#else
+	memcpy(ob_bin, work->data, numbytes);
+	rev(ob_bin, numbytes);
+#endif
 
 #ifndef WIN32
 	tcflush(fd, TCOFLUSH);
@@ -833,7 +874,7 @@ static int64_t icarus_scanhash(struct thr_info *thr, struct work *work,
 	else if (kramble_id >= KRAMBLE_MAXICARUS)
 		kramble_id = KRAMBLE_MAXICARUS - 1;	// Don't overflow (ought to abort or something)
 
-	unsigned char *kramble_this_prev_ob_bin = kramble_prev_ob_bin + 80 * kramble_id;
+	unsigned char *kramble_this_prev_ob_bin = kramble_prev_ob_bin + 84 * kramble_id;
 	if (memcmp(kramble_this_prev_ob_bin, ob_bin, numbytes))
 	{	
 		memcpy(kramble_this_prev_ob_bin, ob_bin, numbytes);
