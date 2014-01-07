@@ -69,6 +69,6 @@ NB The clock speed is divided by 4 internally for hashing purposes.
 
 It will not work for my current lancelot bitstream, use the python miner instead, however
 there is now an experimental #define LANCELOT84 in driver-icarus.c that you can uncomment
-to compile a version for the lancelot (it won't then work with CM1). Note that setting clock
-speed is not supported, so you will still need to use the python script to set the initial
-clock speed after initializing the bitstream.
+to compile a version for the lancelot (it won't then work with CM1). Clock speed can
+be set using --cainsmore-clock with values around 45 to 50 being appropriate for the dual
+core bitstream rel-13-icarus-lx150-25Mhz-max-51Mhz.bit
