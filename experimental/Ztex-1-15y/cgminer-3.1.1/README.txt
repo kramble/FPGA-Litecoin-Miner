@@ -4,7 +4,7 @@ I don't think its appropriate to fork the repository in this case so I will
 just supply patches to specific release versions.
 
 WARNING - This is a VERY rough initial port. Its horribly buggy.
-In particular the icarus (cainsmore) hash rate reported is completely wrong.
+In particular the icarus (cairnsmore) hash rate reported is completely wrong.
 
 Compilation
 Open the official repository (link above) in your browser, click the "branches"
@@ -55,13 +55,22 @@ If --ztex-clock is not used the default range is 124MHz to 196MHz.
 Setting both initial and max speeds the same will disable automatic changes.
 NB The clock speed is divided by 4 internally for hashing purposes.
 
-Cainsmore
-Cainsmore CM1 will be detected as icarus
+Cairnsmore
+Cairnsmore CM1 will be detected as icarus
 Use the -S option eg.  -S \\.\COM20 -S \\.\COM21 -S \\.\COM22 -S \\.\COM23 
-It will not work for my current lancelot bitstream, use the python miner instead.
 Clock speed can be set with --cainsmore-clock which takes a single value eg
 --cainsmore-clock 150				sets all devices to 150MHz
 --cainsmore-clock 140,145,150,155	sets individual device speeds
+NB Note the typo --cainsmore-clock rather than --cairnsmore-clock. This is not yet fixed in the
+cgminer code, so take care with the spelling, sorry).
 The clock resolution is 2.5MHz (rounds down) and the valid range is 50MHz to 300MHz.
 If --cainsmore-clock is not used the default is 150MHz
 NB The clock speed is divided by 4 internally for hashing purposes.
+You should use --icarus-timing to tune for best results, use a very short work refresh
+interval, eg --icarus-timing 1.0=20 (20 deciseconds = two seconds refresh).
+
+It will not work for my current lancelot bitstream, use the python miner instead, however
+there is now an experimental #define LANCELOT84 in driver-icarus.c that you can uncomment
+to compile a version for the lancelot (it won't then work with CM1). Note that setting clock
+speed is not supported, so you will still need to use the python script to set the initial
+clock speed after initializing the bitstream.

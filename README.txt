@@ -36,7 +36,7 @@ Contents
 DE2-115-Single  Single full scratchpad core, this is the simplest implementation.
 
 DE0-Nano        Uses interpolation as the full scratchpad does not fit (this is the
-                same as LOOKAHEAD_GAP=2 in GPU). Test results ...
+                same as LOOKUP_GAP=2 in GPU). Test results ...
                 1.16 kHash/sec at 25Mhz (this is Fmax at 85C/Slow model)
                 2.09 kHash/sec at 45Mhz
                 Fmax is 25MHz, so anything greater may not work reliably on your device.
@@ -49,6 +49,14 @@ ICARUS-LX150    A Xilinx LX150 multicore port for ngzhang's Icarus/Lancelot boar
 scripts         Mining scripts.
 
 source          Verilog source code.
+
+Ztex and Cairnsmore CM1
+-----------------------
+Ports for the Ztex 1.15y and Cairnsmore CM1 quad boards are available in the experimental
+folder. Both achieve around 60kHash/sec (total for all four FPGA devices) using a single
+core and 16 threads (identical to the current ICARUS-LX150 code). A customised version of
+cgminer 3.1.1 must be used (see experimental/Ztex-1-15y/cgminer-3.1.1 which supports both
+boards). Bitstreams are linked in the respective READMEs.
 
 Usage
 -----

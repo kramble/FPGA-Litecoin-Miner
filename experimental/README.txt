@@ -20,8 +20,9 @@ need a rather complex interface (needing to use burst-mode to maximise speed), s
 be a rather more advanced project, but at least we don't need to worry about doing refresh
 as each hash is completed well within the refresh timeout limits.
 
-Contents
---------
+Contents (chronological order)
+------------------------------
+NB These are LX150 Icarus/Lancelot ports (apart from the later entries for Ztex/CM1 etc)
 
 hashvariant-A.v    Uses RAM to reduce register count by eliminating X0Save, X1Save
 
@@ -56,6 +57,15 @@ LX150-SLOWSIXTEEN-A Added a pipeline stage between column and row operations. Si
 
 LX150-SIXTYFOUR-A  Included for completeness, its performance is quite poor.
 
+ZTEX               Old NON-working code for ztex 1.15b - DO NOT USE
+
+Ztex-1.15y         Working Ztex 1.15y port plus subfolder for cgminer 3.1.1
+
+CM1                Working Carinsmore CM1 port (use same cgminer as Ztex-1.15y above)
+
+DE2-115-SLOWSIXTEEN Experimental port (untested) requested by forum user Dork and
+                   intended as a bridge to a Cyclone V SOCKit port.
+
 The later versions (LX150-EIGHT onwards) are built in PlanAhead version 14.4 (32 bits)
 using the following modified synthesis settings (strategy defined in Tools/Options) ...
 
@@ -67,3 +77,5 @@ equivalent register removal = no
 The constraint on hash_clk is VERY lax at 10MHz to facilitate a quick build. You will
 need to increase this for a better FMAX, in conjunction with tuning the implementation
 strategy (for example try setting different values for the tables option -t).
+
+The Ztex-1.15y requires special build instructions, see the README.
