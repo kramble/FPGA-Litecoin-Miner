@@ -66,8 +66,6 @@ cgminer code, so take care with the spelling, sorry).
 The clock resolution is 2.5MHz (rounds down) and the valid range is 50MHz to 300MHz.
 If --cainsmore-clock is not used the default is 150MHz
 NB The clock speed is divided by 4 internally for hashing purposes.
-You should use --icarus-timing to tune for best results, use a very short work refresh
-interval, eg --icarus-timing 1.0=20 (20 deciseconds = two seconds refresh).
 
 It will not work for my current lancelot bitstream, use the python miner instead, however
 there is now an experimental #define LANCELOT84 in driver-icarus.c that you can uncomment
