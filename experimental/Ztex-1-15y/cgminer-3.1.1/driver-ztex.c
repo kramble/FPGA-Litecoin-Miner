@@ -286,7 +286,10 @@ static int64_t ztex_scanhash(struct thr_info *thr, struct work *work,
 
 		for (i = 0; i < ztex->numNonces; i++) {
 			nonce = hdata[i].nonce;
-			if (nonce > noncecnt)
+			//if (nonce > noncecnt)  by smartbitcoin
+			// fix the verilog bug which send  INT_MAX as nonce sometime.
+			// NB:  cgminer , nonce counter was int64, but ztex driver was int32.
+			if( nonce > noncecnt && nonce <  1<<28 )
 				noncecnt = nonce;
 			// KRAMBLE don't overflow if nonce == 0 (eg if fpga is not hashing)
 			if ( (((0xffffffff - nonce) < (nonce - lastnonce[i])) || nonce < lastnonce[i]) && nonce ) {
